@@ -97,7 +97,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 asimov-1's real forward axis is local +X (matches ROS `Twist.linear.x` directly, no axis remapping needed).
 
-**Known open items** (as of this checkpoint): the commandable velocity range is close to, but not yet at, the full range asimov-1's original creators (Menlo) report using (`lin_vel_x=Β±0.8`, `lin_vel_y=Β±0.6` m/s) - widening the remaining gap is a deliberately paused task in favor of a gait-quality tuning pass first. A dedicated fall-recovery policy and a sit-to-stand/chair policy are both reasonable next projects once walking quality is fully settled.
+**Known open items** (as of this checkpoint): the commandable velocity range is close to, but not yet at, the full range asimov-1's original creators (Menlo) report using (`lin_vel_x=+/-0.8`, `lin_vel_y=+/-0.6` m/s) - widening the remaining gap is a deliberately paused task in favor of a gait-quality tuning pass first. A dedicated fall-recovery policy and a sit-to-stand/chair policy are both reasonable next projects once walking quality is fully settled.
 
 **Important note if touching this asset's visuals**: the robot's materials use Isaac Lab's native instancing (`instanceable=true`) for GPU efficiency across many cloned training environments. USD's instancing rules mean a shared `material:binding` pointing outside a prim's own instanceable subtree gets **silently dropped** at composition time - editing the shared `AsimovGreen`/`AsimovGrey` material definitions has zero effect on the render. Recoloring must be done via each mesh prim's own `displayColor` attribute instead (a plain per-mesh value, not a cross-prim binding, so it isn't subject to the same rule).
 
@@ -121,7 +121,7 @@ Drive it with a keyboard:
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
-**Important axis quirk**: v1x1's real anatomical forward is local **+Y**, not +X (a quirk of this robot's own mount orientation) - `play_v1x1_cmd_vel.py` already handles the remap internally (`Twist.linear.x` β†’ v1x1's `lin_vel_y` slot, `Twist.linear.y` β†’ `lin_vel_x`), so standard keyboard teleop still feels correct (forward key drives it forward) - just don't assume the raw command-vector axes line up with ROS convention if you're reading `vel_command_b` directly elsewhere.
+**Important axis quirk**: v1x1's real anatomical forward is local **+Y**, not +X (a quirk of this robot's own mount orientation) - `play_v1x1_cmd_vel.py` already handles the remap internally (`Twist.linear.x` -> v1x1's `lin_vel_y` slot, `Twist.linear.y` -> `lin_vel_x`), so standard keyboard teleop still feels correct (forward key drives it forward) - just don't assume the raw command-vector axes line up with ROS convention if you're reading `vel_command_b` directly elsewhere.
 
 ## A note on scope
 
