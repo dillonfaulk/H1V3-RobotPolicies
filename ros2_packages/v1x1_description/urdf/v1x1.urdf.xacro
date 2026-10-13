@@ -1,0 +1,651 @@
+<?xml version="1.0"?>
+<robot name="v1x1" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:property name="V1X1_BASE_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_base_link.stl" />
+
+    <xacro:property name="V1X1_L1L1_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg_link1.stl" />
+    <xacro:property name="V1X1_L1L2_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg_link2.stl" />
+    <xacro:property name="V1X1_L1L3_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg_link3.stl" />
+    <xacro:property name="V1X1_L1L4_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg_link4.stl" />
+
+    <xacro:property name="V1X1_L2L1_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg2_link1.stl" />
+    <xacro:property name="V1X1_L2L2_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg2_link2.stl" />
+    <xacro:property name="V1X1_L2L3_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg2_link3.stl" />
+    <xacro:property name="V1X1_L2L4_path" value="file:///home/n3z/ros2_ws/src/v1x1_description/urdf/v1x1_leg2_link4.stl" />
+
+
+
+    <!-- World (fixed) -->
+    <link name="world"/>
+
+
+
+    <!-- CENTRAL BODY -->
+    <link name="base_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_BASE_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0.2 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_BASE_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.000008 0.000008 0.031871" rpy="0 0 0"/>
+            <mass value="7.196211"/>
+            <inertia 
+                ixx="0.1112" ixy="0.000008472" ixz="0.000000135"
+                iyy="0.1118" iyz="0.000000141" izz="0.2177"/>
+        </inertial>
+    </link>
+   <!-- Fixed Base -->
+    <joint name="base_joint" type="fixed">
+        <parent link="world"/>
+        <child link="base_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+
+
+    <!-- LEG 1 AFT-LEFT -->
+    <!-- Link 1 -->
+    <link name="leg1_link1">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="green">
+                <color rgba="0.2 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <mass value="0.807227"/>
+            <inertia
+                ixx="0.001201" ixy="-0.0000004423" ixz="-0.000007109346"
+                iyy="0.001457" iyz="-0.000039408839" izz="0.000736575809"/>
+        </inertial>
+    </link>
+    <joint name="leg1_joint1" type="revolute">
+        <parent link="base_link"/>
+        <child link="leg1_link1"/>
+        <origin xyz="-0.141421 -0.141421 0.055" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 2 -->
+    <link name="leg1_link2">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="-0.0525 0 0" rpy="0 0 0"/>
+            <mass value="1.016693"/>
+            <inertia
+                ixx="0.001373" ixy="-0.000000015313" ixz="-0.000059653038"
+                iyy="0.003402" iyz="-0.000000014951" izz="0.003615"/>
+        </inertial>
+    </link>
+    <joint name="leg1_joint2" type="revolute">
+        <parent link="leg1_link1"/>
+        <child link="leg1_link2"/>
+        <origin xyz="0 0.005875 0.06275" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 3 -->
+    <link name="leg1_link3">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0.2 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="-0.055 0 0" rpy="0 0 0"/>
+            <mass value="0.751083"/>
+            <inertia
+                ixx="0.000599977449" ixy="-0.000001253914" ixz="-0.00000815117"
+                iyy="0.001170" iyz="0.000000578178" izz="0.000912851097"/>
+        </inertial>
+    </link>
+    <joint name="leg1_joint3" type="revolute">
+        <parent link="leg1_link2"/>
+        <child link="leg1_link3"/>
+        <origin xyz="-0.1445 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 4 -->
+    <link name="leg1_link4">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="-0.01 0 -0.1" rpy="0 0 0"/>
+            <mass value="1.794443"/>
+            <inertia
+                ixx="0.01268" ixy="-0.00000000386" ixz="-0.000684917375"
+                iyy="0.01266" iyz="-0.000000009358" izz="0.003340"/>
+        </inertial>
+    </link>
+    <joint name="leg1_joint4" type="revolute">
+        <parent link="leg1_link3"/>
+        <child link="leg1_link4"/>
+        <origin xyz="-0.06275 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Fixed End-Effector for IK code -->
+    <!-- EE_Link -->
+    <link name="leg1_ee_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius="0.01"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.8 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="leg1_ee_joint" type="fixed">
+        <parent link="leg1_link4"/>
+        <child link="leg1_ee_link"/>
+        <origin xyz="0 0 -0.242481" rpy="0 0 0"/>
+    </joint>
+
+
+
+    <!-- LEG 2 AFT-RIGHT -->
+    <!-- Link 1 -->
+    <link name="leg2_link1">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="green">
+                <color rgba="0.2 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <mass value="0.807227"/>
+            <inertia
+                ixx="0.001201" ixy="0.0000004423" ixz="0.000007109346"
+                iyy="0.001457" iyz="-0.000039408839" izz="0.000736575809"/>
+        </inertial>
+    </link>
+    <joint name="leg2_joint1" type="revolute">
+        <parent link="base_link"/>
+        <child link="leg2_link1"/>
+        <origin xyz="0.141421 -0.141421 0.055" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 2 -->
+    <link name="leg2_link2">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.0525 0 0" rpy="0 0 0"/>
+            <mass value="1.016693"/>
+            <inertia
+                ixx="0.001373" ixy="-0.000000015313" ixz="0.000059653038"
+                iyy="0.003402" iyz="0.000000014951" izz="0.003615"/>
+        </inertial>
+    </link>
+    <joint name="leg2_joint2" type="revolute">
+        <parent link="leg2_link1"/>
+        <child link="leg2_link2"/>
+        <origin xyz="0 0.005875 0.06275" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 3 -->
+    <link name="leg2_link3">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0.2 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.055 0 0" rpy="0 0 0"/>
+            <mass value="0.751083"/>
+            <inertia
+                ixx="0.000599977449" ixy="0.000001253914" ixz="0.00000815117"
+                iyy="0.001170" iyz="0.000000578178" izz="0.000912851097"/>
+        </inertial>
+    </link>
+    <joint name="leg2_joint3" type="revolute">
+        <parent link="leg2_link2"/>
+        <child link="leg2_link3"/>
+        <origin xyz="0.1445 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 4 -->
+    <link name="leg2_link4">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.01 0 -0.1" rpy="0 0 0"/>
+            <mass value="1.794443"/>
+            <inertia
+                ixx="0.01268" ixy="0.00000000386" ixz="0.000684917375"
+                iyy="0.01266" iyz="-0.000000009358" izz="0.003340"/>
+        </inertial>
+    </link>
+    <joint name="leg2_joint4" type="revolute">
+        <parent link="leg2_link3"/>
+        <child link="leg2_link4"/>
+        <origin xyz="0.06275 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Fixed End-Effector for IK code -->
+    <!-- EE_Link -->
+    <link name="leg2_ee_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius="0.01"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.8 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="leg2_ee_joint" type="fixed">
+        <parent link="leg2_link4"/>
+        <child link="leg2_ee_link"/>
+        <origin xyz="0 0 -0.242481" rpy="0 0 0"/>
+    </joint>
+
+    <!-- LEG 3 FRONT-LEFT -->
+    <!-- Link 1 -->
+    <link name="leg3_link1">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="green">
+                <color rgba="0.2 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <mass value="0.807227"/>
+            <inertia
+                ixx="0.001201" ixy="-0.0000004423" ixz="-0.000007109346"
+                iyy="0.001457" iyz="-0.000039408839" izz="0.000736575809"/>
+        </inertial>
+    </link>
+    <joint name="leg3_joint1" type="revolute">
+        <parent link="base_link"/>
+        <child link="leg3_link1"/>
+        <origin xyz="-0.141421 0.141421 0.055" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 2 -->
+    <link name="leg3_link2">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <mass value="0.807227"/>
+            <inertia
+                ixx="0.001201" ixy="-0.0000004423" ixz="-0.000007109346"
+                iyy="0.001457" iyz="-0.000039408839" izz="0.000736575809"/>
+        </inertial>
+    </link>
+    <joint name="leg3_joint2" type="revolute">
+        <parent link="leg3_link1"/>
+        <child link="leg3_link2"/>
+        <origin xyz="0 0.005875 0.06275" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 3 -->
+    <link name="leg3_link3">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0.2 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="-0.055 0 0" rpy="0 0 0"/>
+            <mass value="0.751083"/>
+            <inertia
+                ixx="0.000599977449" ixy="-0.000001253914" ixz="-0.00000815117"
+                iyy="0.001170" iyz="0.000000578178" izz="0.000912851097"/>
+        </inertial>
+    </link>
+    <joint name="leg3_joint3" type="revolute">
+        <parent link="leg3_link2"/>
+        <child link="leg3_link3"/>
+        <origin xyz="-0.1445 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 4 -->
+    <link name="leg3_link4">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L1L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="-0.01 0 -0.1" rpy="0 0 0"/>
+            <mass value="1.794443"/>
+            <inertia
+                ixx="0.01268" ixy="-0.00000000386" ixz="-0.000684917375"
+                iyy="0.01266" iyz="-0.000000009358" izz="0.003340"/>
+        </inertial>
+    </link>
+    <joint name="leg3_joint4" type="revolute">
+        <parent link="leg3_link3"/>
+        <child link="leg3_link4"/>
+        <origin xyz="-0.06275 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Fixed End-Effector for IK code -->
+    <!-- EE_Link -->
+    <link name="leg3_ee_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius="0.01"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.8 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="leg3_ee_joint" type="fixed">
+        <parent link="leg3_link4"/>
+        <child link="leg3_ee_link"/>
+        <origin xyz="0 0 -0.242481" rpy="0 0 0"/>
+    </joint>
+
+    <!-- LEG 4 FRONT-RIGHT -->
+    <!-- Link 1 -->
+    <link name="leg4_link1">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="green">
+                <color rgba="0.2 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L1_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <mass value="0.807227"/>
+            <inertia
+                ixx="0.001201" ixy="0.0000004423" ixz="0.000007109346"
+                iyy="0.001457" iyz="-0.000039408839" izz="0.000736575809"/>
+        </inertial>
+    </link>
+    <joint name="leg4_joint1" type="revolute">
+        <parent link="base_link"/>
+        <child link="leg4_link1"/>
+        <origin xyz="0.141421 0.141421 0.055" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 2 -->
+    <link name="leg4_link2">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L2_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.0525 0 0" rpy="0 0 0"/>
+            <mass value="1.016693"/>
+            <inertia
+                ixx="0.001373" ixy="-0.000000015313" ixz="0.000059653038"
+                iyy="0.003402" iyz="0.000000014951" izz="0.003615"/>
+        </inertial>
+    </link>
+    <joint name="leg4_joint2" type="revolute">
+        <parent link="leg4_link1"/>
+        <child link="leg4_link2"/>
+        <origin xyz="0 0.005875 0.06275" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 3 -->
+    <link name="leg4_link3">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0.2 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L3_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.055 0 0" rpy="0 0 0"/>
+            <mass value="0.751083"/>
+            <inertia
+                ixx="0.000599977449" ixy="0.000001253914" ixz="0.00000815117"
+                iyy="0.001170" iyz="0.000000578178" izz="0.000912851097"/>
+        </inertial>
+    </link>
+    <joint name="leg4_joint3" type="revolute">
+        <parent link="leg4_link2"/>
+        <child link="leg4_link3"/>
+        <origin xyz="0.1445 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Link 4 -->
+    <link name="leg4_link4">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 0.8 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${V1X1_L2L4_path}" scale="0.001 0.001 0.001"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="0.01 0 -0.1" rpy="0 0 0"/>
+            <mass value="1.794443"/>
+            <inertia
+                ixx="0.01268" ixy="0.00000000386" ixz="0.000684917375"
+                iyy="0.01266" iyz="-0.000000009358" izz="0.003340"/>
+        </inertial>
+    </link>
+    <joint name="leg4_joint4" type="revolute">
+        <parent link="leg4_link3"/>
+        <child link="leg4_link4"/>
+        <origin xyz="0.06275 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-2.356" upper="2.356" effort="100" velocity="1"/>
+    </joint>
+    <!-- Fixed End-Effector for IK code -->
+    <!-- EE_Link -->    
+    <link name="leg4_ee_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius="0.01"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.8 0.8 0.2 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="leg4_ee_joint" type="fixed">
+        <parent link="leg4_link4"/>
+        <child link="leg4_ee_link"/>
+        <origin xyz="0 0 -0.242481" rpy="0 0 0"/>
+    </joint>
+
+</robot>

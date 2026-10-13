@@ -1,0 +1,517 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.1.3"
+    }
+    defaultPrim = "v1x1"
+    doc = """Generated from Composed Stage of root layer /tmp/tmpu6om6j7i/v1x1.usdc
+
+
+Generated from Composed Stage of root layer /tmp/urdf_import_v1x1_pruned_nlagxveb/usdex_v1x1_pruned/v1x1.usdc
+
+
+Generated from Composed Stage of root layer /tmp/urdf_import_v1x1_pruned_nlagxveb/temp_v1x1_pruned/v1x1_pruned.usd
+
+
+Generated from Composed Stage of root layer /home/n3z/IsaacLab/source/isaaclab_assets/data/Robots/v1x1/v1x1_pruned/payloads/base.usd
+"""
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    subLayers = [
+        @./physics.usda@
+    ]
+    upAxis = "Z"
+)
+
+over "v1x1"
+{
+    over "Physics"
+    {
+        def MjcActuator "leg1_joint1_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg1_joint1>
+        }
+
+        def MjcActuator "leg1_joint2_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg1_joint2>
+        }
+
+        def MjcActuator "leg1_joint3_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg1_joint3>
+        }
+
+        def MjcActuator "leg1_joint4_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg1_joint4>
+        }
+
+        def MjcActuator "leg2_joint1_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg2_joint1>
+        }
+
+        def MjcActuator "leg2_joint2_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg2_joint2>
+        }
+
+        def MjcActuator "leg2_joint3_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg2_joint3>
+        }
+
+        def MjcActuator "leg2_joint4_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg2_joint4>
+        }
+
+        def MjcActuator "leg3_joint1_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg3_joint1>
+        }
+
+        def MjcActuator "leg3_joint2_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg3_joint2>
+        }
+
+        def MjcActuator "leg3_joint3_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg3_joint3>
+        }
+
+        def MjcActuator "leg3_joint4_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg3_joint4>
+        }
+
+        def MjcActuator "leg4_joint1_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg4_joint1>
+        }
+
+        def MjcActuator "leg4_joint2_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg4_joint2>
+        }
+
+        def MjcActuator "leg4_joint3_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg4_joint3>
+        }
+
+        def MjcActuator "leg4_joint4_actuator"
+        {
+            uniform double[] mjc:biasPrm = [0, -1.7453292608261108, -0.01745329238474369, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:biasType = "affine"
+            uniform double mjc:forceRange:max = 100
+            uniform double mjc:forceRange:min = -100
+            uniform double[] mjc:gainPrm = [1.7453292608261108, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            uniform token mjc:gainType = "fixed"
+            custom rel mjc:target
+            prepend rel mjc:target = </v1x1/Physics/leg4_joint4>
+        }
+
+        over "leg1_joint1" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg2_joint1" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg3_joint1" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg4_joint1" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg1_joint2" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg1_joint3" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg1_joint4" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg2_joint2" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg2_joint3" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg2_joint4" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg3_joint2" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg3_joint3" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg3_joint4" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg4_joint2" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg4_joint3" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+
+        over "leg4_joint4" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "base_link"
+        {
+            over "leg1_link1"
+            {
+                over "leg1_link2"
+                {
+                    over "leg1_link3"
+                    {
+                        over "leg1_link4"
+                        {
+                            over "v1x1_leg_link4"
+                            {
+                            }
+
+                            over "v1x1_leg_link4_1"
+                            {
+                            }
+                        }
+
+                        over "v1x1_leg_link3"
+                        {
+                        }
+
+                        over "v1x1_leg_link3_1"
+                        {
+                        }
+                    }
+
+                    over "v1x1_leg_link2"
+                    {
+                    }
+
+                    over "v1x1_leg_link2_1"
+                    {
+                    }
+                }
+
+                over "v1x1_leg_link1"
+                {
+                }
+
+                over "v1x1_leg_link1_1"
+                {
+                }
+            }
+
+            over "leg2_link1"
+            {
+                over "leg2_link2"
+                {
+                    over "leg2_link3"
+                    {
+                        over "leg2_link4"
+                        {
+                            over "v1x1_leg2_link4"
+                            {
+                            }
+
+                            over "v1x1_leg2_link4_1"
+                            {
+                            }
+                        }
+
+                        over "v1x1_leg2_link3"
+                        {
+                        }
+
+                        over "v1x1_leg2_link3_1"
+                        {
+                        }
+                    }
+
+                    over "v1x1_leg2_link2"
+                    {
+                    }
+
+                    over "v1x1_leg2_link2_1"
+                    {
+                    }
+                }
+
+                over "v1x1_leg2_link1"
+                {
+                }
+
+                over "v1x1_leg2_link1_1"
+                {
+                }
+            }
+
+            over "leg3_link1"
+            {
+                over "leg3_link2"
+                {
+                    over "leg3_link3"
+                    {
+                        over "leg3_link4"
+                        {
+                            over "v1x1_leg_link4"
+                            {
+                            }
+
+                            over "v1x1_leg_link4_1"
+                            {
+                            }
+                        }
+
+                        over "v1x1_leg_link3"
+                        {
+                        }
+
+                        over "v1x1_leg_link3_1"
+                        {
+                        }
+                    }
+
+                    over "v1x1_leg_link2"
+                    {
+                    }
+
+                    over "v1x1_leg_link2_1"
+                    {
+                    }
+                }
+
+                over "v1x1_leg_link1"
+                {
+                }
+
+                over "v1x1_leg_link1_1"
+                {
+                }
+            }
+
+            over "leg4_link1"
+            {
+                over "leg4_link2"
+                {
+                    over "leg4_link3"
+                    {
+                        over "leg4_link4"
+                        {
+                            over "v1x1_leg2_link4"
+                            {
+                            }
+
+                            over "v1x1_leg2_link4_1"
+                            {
+                            }
+                        }
+
+                        over "v1x1_leg2_link3"
+                        {
+                        }
+
+                        over "v1x1_leg2_link3_1"
+                        {
+                        }
+                    }
+
+                    over "v1x1_leg2_link2"
+                    {
+                    }
+
+                    over "v1x1_leg2_link2_1"
+                    {
+                    }
+                }
+
+                over "v1x1_leg2_link1"
+                {
+                }
+
+                over "v1x1_leg2_link1_1"
+                {
+                }
+            }
+
+            over "v1x1_base_link"
+            {
+            }
+
+            over "v1x1_base_link_1"
+            {
+            }
+        }
+    }
+
+    over "Materials"
+    {
+    }
+
+    over "VisualMaterials"
+    {
+    }
+}
+

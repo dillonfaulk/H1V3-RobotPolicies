@@ -1,0 +1,42 @@
+diff --git a/source/isaaclab_assets/isaaclab_assets/__init__.pyi b/source/isaaclab_assets/isaaclab_assets/__init__.pyi
+index dc69e0b8c..de6f464a0 100644
+--- a/source/isaaclab_assets/isaaclab_assets/__init__.pyi
++++ b/source/isaaclab_assets/isaaclab_assets/__init__.pyi
+@@ -10,6 +10,7 @@ __all__ = [
+     "DIGIT_V4_CFG",
+     "ALLEGRO_HAND_CFG",
+     "ANT_CFG",
++    "V1X1_CFG",
+     "ANYDRIVE_3_SIMPLE_ACTUATOR_CFG",
+     "ANYDRIVE_3_LSTM_ACTUATOR_CFG",
+     "ANYMAL_B_CFG",
+@@ -73,6 +74,7 @@ from .robots import (
+     DIGIT_V4_CFG,
+     ALLEGRO_HAND_CFG,
+     ANT_CFG,
++    V1X1_CFG,
+     ANYDRIVE_3_SIMPLE_ACTUATOR_CFG,
+     ANYDRIVE_3_LSTM_ACTUATOR_CFG,
+     ANYMAL_B_CFG,
+diff --git a/source/isaaclab_assets/isaaclab_assets/robots/__init__.pyi b/source/isaaclab_assets/isaaclab_assets/robots/__init__.pyi
+index 1a91afa21..193de6c1c 100644
+--- a/source/isaaclab_assets/isaaclab_assets/robots/__init__.pyi
++++ b/source/isaaclab_assets/isaaclab_assets/robots/__init__.pyi
+@@ -10,6 +10,8 @@ __all__ = [
+     "DIGIT_V4_CFG",
+     "ALLEGRO_HAND_CFG",
+     "ANT_CFG",
++    "V1X1_CFG",
++    "ASIMOV1_CFG",
+     "ANYDRIVE_3_SIMPLE_ACTUATOR_CFG",
+     "ANYDRIVE_3_LSTM_ACTUATOR_CFG",
+     "ANYMAL_B_CFG",
+@@ -62,6 +64,8 @@ from .agibot import AGIBOT_A2D_CFG
+ from .agility import LEG_JOINT_NAMES, ARM_JOINT_NAMES, DIGIT_V4_CFG
+ from .allegro import ALLEGRO_HAND_CFG
+ from .ant import ANT_CFG
++from .v1x1 import V1X1_CFG
++from .asimov1 import ASIMOV1_CFG
+ from .anymal import (
+     ANYDRIVE_3_SIMPLE_ACTUATOR_CFG,
+     ANYDRIVE_3_LSTM_ACTUATOR_CFG,

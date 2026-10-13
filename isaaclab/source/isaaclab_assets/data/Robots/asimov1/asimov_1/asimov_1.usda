@@ -1,0 +1,98 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.1.3"
+    }
+    defaultPrim = "asimov_1"
+    doc = """Generated from Composed Stage of root layer /tmp/tmpzahvz1j8/asimov_1.usdc
+
+
+Generated from Composed Stage of root layer /tmp/urdf_import_asimov_1_j53y58jh/usdex_asimov_1/asimov_1.usdc
+
+
+Generated from Composed Stage of root layer /tmp/urdf_import_asimov_1_j53y58jh/temp_asimov_1/asimov_1.usd
+"""
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "asimov_1" (
+    prepend references = @./payloads/base.usda@
+    variants = {
+        string Physics = "physx"
+    }
+    append variantSets = "Physics"
+)
+{
+    over "Geometry"
+    {
+        over "pelvis_link"
+        {
+            over "left_hip_pitch_link"
+            {
+                over "left_hip_roll_link"
+                {
+                    over "left_hip_yaw_link"
+                    {
+                        over "left_knee_link"
+                        {
+                            over "left_ankle_pitch_link"
+                            {
+                                over "left_ankle_roll_link" (
+                                    prepend apiSchemas = ["PhysxContactReportAPI"]
+                                )
+                                {
+                                    custom float physxContactReport:threshold = 0
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            over "right_hip_pitch_link"
+            {
+                over "right_hip_roll_link"
+                {
+                    over "right_hip_yaw_link"
+                    {
+                        over "right_knee_link"
+                        {
+                            over "right_ankle_pitch_link"
+                            {
+                                over "right_ankle_roll_link" (
+                                    prepend apiSchemas = ["PhysxContactReportAPI"]
+                                )
+                                {
+                                    custom float physxContactReport:threshold = 0
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    variantSet "Physics" = {
+        "mujoco" (
+            prepend payload = @./payloads/Physics/mujoco.usda@
+        ) {
+
+        }
+        "none" {
+
+        }
+        "physics" (
+            prepend payload = @./payloads/Physics/physics.usda@
+        ) {
+
+        }
+        "physx" (
+            prepend payload = @./payloads/Physics/physx.usda@
+        ) {
+
+        }
+    }
+}
+

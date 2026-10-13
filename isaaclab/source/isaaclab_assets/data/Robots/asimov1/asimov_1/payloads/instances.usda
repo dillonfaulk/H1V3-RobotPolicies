@@ -1,0 +1,246 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.1.3"
+    }
+    doc = """Generated from Composed Stage of root layer /tmp/tmpzahvz1j8/asimov_1.usdc
+
+
+Generated from Composed Stage of root layer /tmp/urdf_import_asimov_1_j53y58jh/usdex_asimov_1/asimov_1.usdc
+
+
+Generated from Composed Stage of root layer /tmp/urdf_import_asimov_1_j53y58jh/temp_asimov_1/asimov_1.usd
+"""
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Scope "Instances"
+{
+    def Xform "IMU_ORIGIN" (
+        prepend references = @./geometries.usd@</Geometries/IMU_ORIGIN>
+    )
+    {
+        over "IMU_ORIGIN"
+        {
+        }
+    }
+
+    def Xform "LEFT_HIP_PITCH" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_HIP_PITCH>
+    )
+    {
+        over "LEFT_HIP_PITCH"
+        {
+        }
+    }
+
+    def Xform "LEFT_HIP_ROLL" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_HIP_ROLL>
+    )
+    {
+        over "LEFT_HIP_ROLL"
+        {
+        }
+    }
+
+    def Xform "LEFT_HIP_YAW" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_HIP_YAW>
+    )
+    {
+        over "LEFT_HIP_YAW"
+        {
+        }
+    }
+
+    def Xform "LEFT_KNEE" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_KNEE>
+    )
+    {
+        over "LEFT_KNEE"
+        {
+        }
+    }
+
+    def Xform "LEFT_ANKLE_A" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_ANKLE_A>
+    )
+    {
+        over "LEFT_ANKLE_A"
+        {
+        }
+    }
+
+    def Xform "ANKLE_B_NEW" (
+        prepend references = @./geometries.usd@</Geometries/ANKLE_B_NEW>
+    )
+    {
+        over "ANKLE_B_NEW"
+        {
+        }
+    }
+
+    def Xform "RIGHT_HIP_PITCH" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_HIP_PITCH>
+    )
+    {
+        over "RIGHT_HIP_PITCH"
+        {
+        }
+    }
+
+    def Xform "RIGHT_HIP_ROLL" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_HIP_ROLL>
+    )
+    {
+        over "RIGHT_HIP_ROLL"
+        {
+        }
+    }
+
+    def Xform "RIGHT_HIP_YAW" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_HIP_YAW>
+    )
+    {
+        over "RIGHT_HIP_YAW"
+        {
+        }
+    }
+
+    def Xform "RIGHT_KNEE" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_KNEE>
+    )
+    {
+        over "RIGHT_KNEE"
+        {
+        }
+    }
+
+    def Xform "RIGHT_ANKLE_A" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_ANKLE_A>
+    )
+    {
+        over "RIGHT_ANKLE_A"
+        {
+        }
+    }
+
+    def Xform "WAIST_YAW" (
+        prepend references = @./geometries.usd@</Geometries/WAIST_YAW>
+    )
+    {
+        over "WAIST_YAW"
+        {
+        }
+    }
+
+    def Xform "NECK_YAW" (
+        prepend references = @./geometries.usd@</Geometries/NECK_YAW>
+    )
+    {
+        over "NECK_YAW"
+        {
+        }
+    }
+
+    def Xform "NECK_PITCH" (
+        prepend references = @./geometries.usd@</Geometries/NECK_PITCH>
+    )
+    {
+        over "NECK_PITCH"
+        {
+        }
+    }
+
+    def Xform "RIGHT_SHOULDER_PITCH" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_SHOULDER_PITCH>
+    )
+    {
+        over "RIGHT_SHOULDER_PITCH"
+        {
+        }
+    }
+
+    def Xform "RIGHT_SHOULDER_ROLL" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_SHOULDER_ROLL>
+    )
+    {
+        over "RIGHT_SHOULDER_ROLL"
+        {
+        }
+    }
+
+    def Xform "RIGHT_SHOULDER_YAW" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_SHOULDER_YAW>
+    )
+    {
+        over "RIGHT_SHOULDER_YAW"
+        {
+        }
+    }
+
+    def Xform "RIGHT_ELBOW" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_ELBOW>
+    )
+    {
+        over "RIGHT_ELBOW"
+        {
+        }
+    }
+
+    def Xform "RIGHT_WRIST_YAW" (
+        prepend references = @./geometries.usd@</Geometries/RIGHT_WRIST_YAW>
+    )
+    {
+        over "RIGHT_WRIST_YAW"
+        {
+        }
+    }
+
+    def Xform "LEFT_SHOULDER_PITCH" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_SHOULDER_PITCH>
+    )
+    {
+        over "LEFT_SHOULDER_PITCH"
+        {
+        }
+    }
+
+    def Xform "LEFT_SHOULDER_ROLL" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_SHOULDER_ROLL>
+    )
+    {
+        over "LEFT_SHOULDER_ROLL"
+        {
+        }
+    }
+
+    def Xform "LEFT_SHOULDER_YAW" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_SHOULDER_YAW>
+    )
+    {
+        over "LEFT_SHOULDER_YAW"
+        {
+        }
+    }
+
+    def Xform "LEFT_ELBOW" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_ELBOW>
+    )
+    {
+        over "LEFT_ELBOW"
+        {
+        }
+    }
+
+    def Xform "LEFT_WRIST_YAW" (
+        prepend references = @./geometries.usd@</Geometries/LEFT_WRIST_YAW>
+    )
+    {
+        over "LEFT_WRIST_YAW"
+        {
+        }
+    }
+}
+
