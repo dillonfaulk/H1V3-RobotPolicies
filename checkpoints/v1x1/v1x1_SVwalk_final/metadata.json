@@ -1,0 +1,94 @@
+{
+  "robot": "v1x1",
+  "isaac_lab_version": "v3.0.0-beta2.patch1",
+  "training_run": "v1x1_SVwalk_final",
+  "source_file": "v1x1_SVwalk_final.pt",
+  "source_sha256": "97da59f4653485a0e8e7675edc1329db20bd545b42f6f12172cfdb6b24eaf45d",
+  "converted_at_utc": "2026-10-13T22:44:50+00:00",
+  "iteration": 7995,
+  "epoch": null,
+  "actor_tensor_shapes": {
+    "distribution.std_param": [
+      16
+    ],
+    "mlp.0.weight": [
+      400,
+      84
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      16,
+      100
+    ],
+    "mlp.6.bias": [
+      16
+    ]
+  },
+  "critic_tensor_shapes": {
+    "mlp.0.weight": [
+      400,
+      84
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      1,
+      100
+    ],
+    "mlp.6.bias": [
+      1
+    ]
+  },
+  "other_tensor_shapes": {},
+  "non_tensor_keys": [
+    "actor_state_dict",
+    "critic_state_dict",
+    "infos",
+    "iter",
+    "optimizer_state_dict"
+  ],
+  "obs_dim": 84,
+  "action_dim": 16,
+  "obs_normalization": {
+    "type": "none",
+    "mean": null,
+    "var": null,
+    "source": "confirmed: no normalizer tensors in this checkpoint -- trained with empirical_normalization=False, raw observations fed directly to the policy."
+  },
+  "command_ranges": null,
+  "control_hz": null,
+  "action_scale": null,
+  "reward_shape_lineage": null,
+  "notes": ""
+}
