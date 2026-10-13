@@ -77,20 +77,24 @@ checkpoints/
 
 tools/
   convert_checkpoint.py        # .pt -> safetensors + metadata.json converter, see below
+  export_onnx.py                # .pt -> onnx converter, see below
 ```
 
-## Safetensors conversions
+## Safetensors and ONNX conversions
 
 Each checkpoint also has a same-named subfolder next to its `.pt` (e.g.
 `checkpoints/asimov1/asimov1_omni_quality_run2_validated/`) containing:
 - `actor.safetensors` - just the deployable policy network (no code, loads instantly, safe to open from an untrusted source - unlike `.pt`, which is pickle and can execute arbitrary code on load).
 - `full.safetensors` - every tensor in the checkpoint (actor + critic + AMP discriminator where present), for continuing training or inspection.
-- `metadata.json` - iteration, tensor shapes, source file hash, and obs/action dims. Confirmed for every checkpoint in this repo: no observation-normalization stats exist (`obs_normalization.type: "none"`) - training ran with `empirical_normalization=False`, so raw observations feed the policy directly. `command_ranges`/`control_hz`/`action_scale` are left `null` (task-config-specific, not auto-extracted - pull from the matching `*_env_cfg.py` in `isaaclab/` if needed).
+- `actor.onnx` - the deployable policy exported as a portable ONNX graph (runs in ONNX Runtime, TensorRT, on a Jetson, etc. with no PyTorch/Isaac Lab installed at all). Exports only the deterministic action mean (no exploration noise/sampling) - the `distribution.std_param` training-only tensor is intentionally excluded, noted in metadata. Self-contained single file (no external-data sidecar), self-describing via embedded ONNX metadata (obs_dim/action_dim/hidden_dims/activation), and numerically verified against the original PyTorch forward pass at export time (see `metadata.json`'s `onnx_export` block for the measured max diff).
+- `metadata.json` - iteration, tensor shapes, source file hash, obs/action dims, and the `onnx_export` block above. Confirmed for every checkpoint in this repo: no observation-normalization stats exist (`obs_normalization.type: "none"`) - training ran with `empirical_normalization=False`, so raw observations feed the policy directly. `command_ranges`/`control_hz`/`action_scale` are left `null` (task-config-specific, not auto-extracted - pull from the matching `*_env_cfg.py` in `isaaclab/` if needed).
 
 Regenerate with:
 ```bash
 ./isaaclab.sh -p tools/convert_checkpoint.py checkpoints/<robot>/<name>.pt \
     --out checkpoints/<robot>/<name> --robot <robot> --isaac-lab v3.0.0-beta2.patch1 --run <name>
+./isaaclab.sh -p tools/export_onnx.py checkpoints/<robot>/<name>.pt \
+    --out checkpoints/<robot>/<name> --robot <robot>
 ```
 
 ## asimov-1: training status

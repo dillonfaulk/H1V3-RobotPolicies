@@ -126,5 +126,21 @@
   "control_hz": null,
   "action_scale": null,
   "reward_shape_lineage": null,
-  "notes": ""
+  "notes": "",
+  "onnx_export": {
+    "obs_dim": 81,
+    "action_dim": 23,
+    "hidden_dims": [
+      400,
+      200,
+      100
+    ],
+    "activation": "elu",
+    "opset_version": 18,
+    "excluded_actor_keys": [
+      "distribution.std_param"
+    ],
+    "verified_against_pytorch": true,
+    "max_abs_diff_vs_pytorch": 2.86102294921875e-06
+  }
 }
