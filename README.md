@@ -1,5 +1,10 @@
 # H1V3-RobotPolicies
 
+<p align="center">
+  <img src="images/asimov1.webp" alt="asimov-1 humanoid" width="45%" />
+  <img src="images/v1x1.png" alt="v1x1 quadruped" width="45%" />
+</p>
+
 Reinforcement learning locomotion policies trained in [NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab), covering two robots:
 
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) β€” a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
