@@ -11,10 +11,11 @@
   <em>asimov-1 driven live via the ROS2 /cmd_vel teleop bridge in this repo - proof of concept.</em>
 </p>
 
-Reinforcement learning locomotion policies trained in [NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab), covering two robots:
+Reinforcement learning locomotion policies trained in [NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab), covering three robots:
 
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) - a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
 - **v1x1** - a custom quadruped. Trained with PPO for omnidirectional walking, also with a live ROS2 teleop bridge.
+- **BDX-R** ([BDX-R/BDX-R-IsaacLab](https://github.com/BDX-R/BDX-R-IsaacLab)) - an open-source Disney BDX-droid-inspired biped, hardware target under $3000. Trained with plain PPO for omnidirectional velocity-command walking on flat ground.
 
 This repo does **not** contain the Isaac Lab framework itself - only the project-specific files (task definitions, reward/termination shaping, robot asset configs, converted USD models, training/play/teleop scripts, and a handful of validated checkpoints) needed to drop back into a fresh Isaac Lab checkout.
 
@@ -49,6 +50,12 @@ The patch adds two export lines (`V1X1_CFG`, `ASIMOV1_CFG`) to `isaaclab_assets`
 
 Checkpoints aren't wired into the `isaaclab/` tree (so you can put them wherever you like) - see `checkpoints/` below, and pass their path via `--checkpoint` on any of the play scripts.
 
+**BDX-R restores differently** - unlike asimov-1/v1x1, it's NOT merged into the Isaac Lab checkout itself. It's a separate external project installed as an editable pip package:
+```bash
+./isaaclab.sh -p -m pip install -e /path/to/H1V3-RobotPolicies/bdxr/source_BDXR
+```
+Then run its scripts directly from wherever you put `bdxr/scripts_rsl_rl/` (they're self-contained, just need `cli_args.py` alongside `train.py`/`play.py`, same as they ship). See [BDX-R: training status](#bdx-r-training-status) below for the exact fixes/launch commands.
+
 ## Repo layout
 
 ```
@@ -78,9 +85,16 @@ ros2_packages/
                                # but the copy here includes a local fix (hardcoded mesh file paths updated
                                # from an old machine hostname) that wasn't committed/pushed there yet.
 
+bdxr/                          # vendored from github.com/BDX-R/BDX-R-IsaacLab (MIT, see LICENSE_UPSTREAM),
+                                # with our own compatibility fixes applied -- see training status section below
+  source_BDXR/                 # the BDXR pip package: robot cfg, task env cfg, mdp, agents, URDF+mesh data
+  scripts_rsl_rl/               # train.py, play.py, cli_args.py
+  LICENSE_UPSTREAM              # upstream repo's MIT license (Kayden Knapik)
+
 checkpoints/
   asimov1/                     # validated milestone checkpoints, see below
   v1x1/
+  bdxr/
 
 tools/
   convert_checkpoint.py        # .pt -> safetensors + metadata.json converter, see below
@@ -156,6 +170,49 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
 **Important axis quirk**: v1x1's real anatomical forward is local **+Y**, not +X (a quirk of this robot's own mount orientation) - `play_v1x1_cmd_vel.py` already handles the remap internally (`Twist.linear.x` -> v1x1's `lin_vel_y` slot, `Twist.linear.y` -> `lin_vel_x`), so standard keyboard teleop still feels correct (forward key drives it forward) - just don't assume the raw command-vector axes line up with ROS convention if you're reading `vel_command_b` directly elsewhere.
+
+## BDX-R: training status
+
+Gym id: `Bdxr-Velocity-Flat-v0` (train), `Bdxr-Velocity-Flat-Play-v0` (play). Built on Isaac Lab's own stock
+`LocomotionVelocityRoughEnvCfg` base class (same one H1/G1 use), trained with plain PPO (no AMP/reference
+motion). Terrain switched from the upstream repo's own multi-row rough-terrain generator to a flat plane, to
+match asimov-1/v1x1's own setup (same goal: walking, not rough-terrain generalization yet) and to spawn
+environments in a tight, easy-to-view grid near the origin instead of scattered across a huge tiled map.
+
+**Checkpoints included**:
+- `bdxr_velocity_flat_validated.pt` - 1500 iterations from scratch, then resumed for 1500 more (2999 total) as
+  a cleanup pass. Final: 100% success rate, ~84%/16% time_out/base_contact termination split, episode length
+  ~930/1000 steps, velocity tracking error down to ~0.26 (xy) / ~0.24 (yaw).
+
+Run it live:
+```bash
+./isaaclab.sh -p bdxr/scripts_rsl_rl/play.py \
+    --task Bdxr-Velocity-Flat-Play-v0 --checkpoint /path/to/bdxr_velocity_flat_validated.pt --num_envs 50 --viz kit
+```
+
+**This upstream repo was written against a different Isaac Lab/rsl-rl-lib version than this repo is pinned
+to** - getting it running against `v3.0.0-beta2.patch1` + the installed `rsl-rl-lib==5.0.1` required 6 real
+compatibility fixes (all already applied in `bdxr/source_BDXR` and `bdxr/scripts_rsl_rl`, confirmed via direct
+inspection, not guessed):
+1. `isaaclab.utils.noise.AdditiveUniformNoiseCfg` renamed to `UniformNoiseCfg` in this pin.
+2. `mdp.imu_projected_gravity` doesn't exist in this pin (no orientation on the `Imu` sensor data at all) -
+   substituted the stock `mdp.projected_gravity`, which is exact here since this robot's IMU mount has a zero
+   rotational offset.
+3. A critic-only (not policy-facing) observation depending on a `JointWrenchSensor` type unavailable in this
+   pin was dropped - zero effect on the deployed policy.
+4. The `height_scanner`/`imu` sensors' hardcoded prim paths were missing a `/Geometry/` path segment that
+   this URDF's on-the-fly conversion actually produces.
+5. **The important one**: Isaac Lab's own `activate_contact_sensors()` helper only activates the PhysX
+   contact-report API on the first rigid body it finds per branch - this URDF nests each leg link as a child
+   of its parent link (mirroring the kinematic chain), so only `base_link` (1 of 11 bodies) was actually
+   getting contact-sensed. Fixed by wrapping the robot's spawn function to re-walk the full tree and activate
+   every rigid body, not just the first one - without this, every foot-contact-dependent reward term
+   (air time, foot clearance, foot slip) would have had zero signal for 10 of 11 bodies.
+6. The installed `rsl-rl-lib` (5.0.1) is two majors ahead of what `train.py`/`play.py` check for
+   (`>=3.0.1`) - `isaaclab_rl.rsl_rl`'s own model-cfg classes leak deprecated fields into the actual model
+   constructor unless `handle_deprecated_rsl_rl_cfg()` is called first, which neither script did by default.
+   Patched both scripts to call it. **This would affect asimov-1/v1x1 too if either were retrained fresh
+   against this same installed rsl-rl-lib version** - not just a BDX-R-specific issue.
 
 ## A note on scope
 
