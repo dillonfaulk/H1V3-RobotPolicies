@@ -64,7 +64,9 @@ isaaclab/                    # mirrors Isaac Lab's own directory structure exact
     train_asimov1_direct.py              # standing/balance task trainer
     train_asimov1_velocity_amp_direct.py # velocity-command (walking) task trainer, PPO+AMP
     train_asimov1_velocity_direct.py     # velocity-command task trainer, plain PPO (no AMP)
+    train_asimov1_fallrecovery_direct.py # fall-recovery (getup) task trainer, plain PPO
     play_asimov1_velocity_amp.py         # watch a checkpoint play back live (task's own random commands)
+    play_asimov1_fallrecovery.py         # watch a fall-recovery checkpoint play back live
     play_asimov1_cmd_vel.py              # ROS2 /cmd_vel teleop bridge for asimov-1
     play_v1x1_cmd_vel.py                 # ROS2 /cmd_vel teleop bridge for v1x1
   source/isaaclab_assets/isaaclab_assets/robots/
@@ -108,7 +110,7 @@ Each checkpoint also has a same-named subfolder next to its `.pt` (e.g.
 - `actor.safetensors` - just the deployable policy network (no code, loads instantly, safe to open from an untrusted source - unlike `.pt`, which is pickle and can execute arbitrary code on load).
 - `full.safetensors` - every tensor in the checkpoint (actor + critic + AMP discriminator where present), for continuing training or inspection.
 - `actor.onnx` - the deployable policy exported as a portable ONNX graph (runs in ONNX Runtime, TensorRT, on a Jetson, etc. with no PyTorch/Isaac Lab installed at all). Exports only the deterministic action mean (no exploration noise/sampling) - the `distribution.std_param` training-only tensor is intentionally excluded, noted in metadata. Self-contained single file (no external-data sidecar), self-describing via embedded ONNX metadata (obs_dim/action_dim/hidden_dims/activation), and numerically verified against the original PyTorch forward pass at export time (see `metadata.json`'s `onnx_export` block for the measured max diff).
-- `metadata.json` - iteration, tensor shapes, source file hash, obs/action dims, and the `onnx_export` block above. Confirmed for every checkpoint in this repo: no observation-normalization stats exist (`obs_normalization.type: "none"`) - training ran with `empirical_normalization=False`, so raw observations feed the policy directly. `command_ranges`/`control_hz`/`action_scale` are left `null` (task-config-specific, not auto-extracted - pull from the matching `*_env_cfg.py` in `isaaclab/` if needed).
+- `metadata.json` - iteration, tensor shapes, source file hash, obs/action dims, and the `onnx_export` block above. `command_ranges`/`control_hz`/`action_scale` are left `null` (task-config-specific, not auto-extracted - pull from the matching `*_env_cfg.py` in `isaaclab/` if needed). Every checkpoint except `asimov1_fallrecovery_validated` has no observation-normalization stats (`obs_normalization.type: "none"`, trained with `empirical_normalization=False`, raw observations feed the policy directly) - **`asimov1_fallrecovery_validated` is the one exception**, trained with `obs_normalization=True` (see its own `metadata.json` for why, and a real caveat: its `actor.onnx` does NOT have the normalizer baked in, so raw unnormalized observations will produce wrong actions on that one specifically - prefer `actor.safetensors` for it until that's fixed).
 
 Regenerate with:
 ```bash
@@ -145,9 +147,28 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 asimov-1's real forward axis is local +X (matches ROS `Twist.linear.x` directly, no axis remapping needed).
 
-**Known open items** (as of this checkpoint): the commandable velocity range is close to, but not yet at, the full range asimov-1's original creators (Menlo) report using (`lin_vel_x=+/-0.8`, `lin_vel_y=+/-0.6` m/s) - widening the remaining gap is a deliberately paused task in favor of a gait-quality tuning pass first. A dedicated fall-recovery policy and a sit-to-stand/chair policy are both reasonable next projects once walking quality is fully settled.
+**Known open items** (as of this checkpoint): the commandable velocity range is close to, but not yet at, the full range asimov-1's original creators (Menlo) report using (`lin_vel_x=+/-0.8`, `lin_vel_y=+/-0.6` m/s) - widening the remaining gap is a deliberately paused task in favor of a gait-quality tuning pass first. A sit-to-stand/chair policy is a reasonable next project once walking quality is fully settled (the fall-recovery/getup policy below is already done).
 
 **Important note if touching this asset's visuals**: the robot's materials use Isaac Lab's native instancing (`instanceable=true`) for GPU efficiency across many cloned training environments. USD's instancing rules mean a shared `material:binding` pointing outside a prim's own instanceable subtree gets **silently dropped** at composition time - editing the shared `AsimovGreen`/`AsimovGrey` material definitions has zero effect on the render. Recoloring must be done via each mesh prim's own `displayColor` attribute instead (a plain per-mesh value, not a cross-prim binding, so it isn't subject to the same rule).
+
+## asimov-1: fall-recovery (getup) training status
+
+Gym id: `Isaac-Asimov1-FallRecovery-v0`. Separate task from standing/walking above - starts from a random fallen pose (full random SO(3) orientation, random position, small velocity jitter) and has to reach a genuine standing pose on its own: lying down -> sit upright -> kneel -> stand. Plain PPO, no AMP (no reference getup motion clip exists for this asset).
+
+No stock Isaac Lab fall-recovery/getup template existed to build from (unlike walking, which had H1/G1/Spot precedent) - this was built from first principles plus literature (HumanUP arXiv:2502.12152, HoST arXiv:2502.08378) and, partway through, by directly comparing against a real working implementation: `openhorizon-labs/asimov-v1-policies`, a separate open-source project training the same getup task on the same robot in mjlab/MuJoCo Warp. Their design (an assist-force curriculum - an upward lift on the pelvis that decays as measured success rate rises, inspired by HoST's own "vertical pulling force" trick - plus their specific PPO hyperparameters) is the single biggest factor that got this checkpoint working, ported into Isaac Lab's own event-manager/wrench-composer APIs.
+
+**17 training runs total**. Runs 1-13 (plain PPO, 1500 iterations each, fresh restarts) progressively diagnosed and fixed: an "A-pose" local optimum (robot using its head as a tripod leg, runs 1-7), a sitting-waypoint plateau that a hard hand-leverage exploit kept re-triggering (runs 8-10), and a dwell-too-long-while-seated problem (runs 11-13) - each fix verified via a dry-run -> headless smoke test -> 300-iteration headless check pipeline before trusting it on a real run, catching 2 real reward-hacking exploits and 2 structural reward-shape bugs along the way. Runs 14-17 switched to OpenHorizon-matched PPO settings (`entropy_coef` 0->0.005, `obs_normalization` False->True, `learning_rate` 5e-4->1e-3) plus a contact-pattern reward (`feet_only_contact`, rewards the specific pattern of "both feet touching, pelvis not" once near standing height) and a hand-pushoff bonus, then stayed on ONE resumed lineage across all 4 runs (14->15->16->17, 15996 total iterations, never restarted fresh) - this combination of a longer/higher-exploration training budget with the assist-force curriculum is what actually broke through: **success rate went from 0% (zero genuine successes across runs 1-13) to 89% by the end of run 17, with the assist-force curriculum fully decayed to 0.0 (the policy succeeds completely unassisted)**.
+
+**Checkpoint included**:
+- `asimov1_fallrecovery_validated.pt` - end of the runs14-17 lineage (iteration 15996), 89% success rate, fully unassisted. **This is the only checkpoint in the repo trained with `obs_normalization=True`** - see its own `metadata.json` and the safetensors/ONNX section above for what that means for deployment (short version: use `actor.safetensors`, not `actor.onnx`, until the normalizer is baked into the ONNX export too).
+
+Run it live:
+```bash
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play_asimov1_fallrecovery.py \
+    --checkpoint /path/to/asimov1_fallrecovery_validated.pt --num_envs 16 --viz kit
+```
+
+**Known open items**: landings are still visibly a little rough (the training-time assist force gave a noticeable "moon gravity" boost once a robot got upright, which inflated the final pose's joint-deviation penalty - this mostly self-corrected as the assist decayed to 0 over the course of run 17, but final pose quality is still the roughest-looking part of a successful attempt). Not yet tested on real hardware or against the stricter multi-session visual-review bar other checkpoints in this repo were held to before being called "validated" - call this a strong training-time result, not a fully closed-out milestone yet.
 
 ## v1x1: training status
 

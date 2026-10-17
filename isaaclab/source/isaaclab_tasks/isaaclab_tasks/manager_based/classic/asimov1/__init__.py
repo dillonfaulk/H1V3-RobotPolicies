@@ -44,3 +44,13 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ASIMOV1VelocityAmpPPORunnerCfg",
     },
 )
+
+gym.register(
+    id="Isaac-Asimov1-FallRecovery-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.asimov1_fall_recovery_env_cfg:ASIMOV1FallRecoveryEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ASIMOV1FallRecoveryPPORunnerCfg",
+    },
+)

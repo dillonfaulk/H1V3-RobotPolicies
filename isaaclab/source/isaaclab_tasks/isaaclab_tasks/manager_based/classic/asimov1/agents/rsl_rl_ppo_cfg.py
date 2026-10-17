@@ -152,6 +152,69 @@ class ASIMOV1VelocityAmpPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 
 @configclass
+class ASIMOV1FallRecoveryPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    """First asimov1 runner cfg to set `obs_groups` explicitly -- the asymmetric actor/critic wiring this
+    task needs (critic gets the "privileged" group's extra contact-wrench/CoM-velocity terms on top of the
+    actor's own proprioception-only "policy" group). Separate experiment_name -- checkpoints land in their
+    own logs/rsl_rl/asimov1_fall_recovery/ directory.
+
+    `entropy_coef`/`obs_normalization`/`learning_rate`/`max_iterations` all changed for run 14 after
+    directly comparing against OpenHorizon's own getup-specific PPO config (openhorizon-labs/asimov-v1-
+    policies, `src/asimov_policies/tasks/getup/rl_cfg.py`, confirmed via a direct fetch -- not inferred
+    from their locomotion policy's own separate config). Their getup policy reaches 100% sim success;
+    13 straight runs here kept hitting the same sitting local optimum despite reward-shaping changes that
+    tracked their design closely (same gating patterns, same assist-force concept) -- the gap looks less
+    like a missing reward term and more like three concrete, confirmed hyperparameter/scale differences:
+    1. **Scale**: their run is `max_iterations=20_000` * `num_envs=4096` * `num_steps_per_env=24` ~= 1.97
+       BILLION total env-steps. Ours (1500*256*32 ~= 12.3M) was ~160x less total training experience --
+       almost certainly the dominant factor. `max_iterations` raised 1500 -> 4000 here (num_envs kept at
+       256, not scaled up, to stay within this project's own proven live-viewing render/VRAM budget) --
+       still far short of their real budget, but a meaningful step up within a realistic single local
+       session (~1.6-2 hours at this run's own measured iteration rate).
+    2. **`entropy_coef`**: theirs is 0.005 for getup specifically; ours was 0.0. This directly controls how
+       much exploration pressure persists through training -- a nonzero entropy bonus keeps pushing against
+       exactly the kind of "found something comfortable (sitting), stop trying" premature convergence this
+       task keeps hitting. Raised 0.0 -> 0.005 to match.
+    3. **`obs_normalization`**: theirs is True for getup specifically (their own comment: "Differs from
+       locomotion: normalization is baked into the ONNX export") -- every existing checkpoint in this WHOLE
+       project (asimov1 omni/v1x1/BDX-R) was trained with this False, confirmed fact from the H1V3-
+       RobotPolicies conversion work. This is the FIRST task to flip it True, matching their own explicit
+       choice for this exact task (not locomotion). `learning_rate` also raised 5e-4 -> 1e-3 to match.
+    """
+
+    num_steps_per_env = 32
+    max_iterations = 4000
+    save_interval = 50
+    experiment_name = "asimov1_fall_recovery"
+    obs_groups = {"actor": ["policy"], "critic": ["policy", "privileged"]}
+    actor = RslRlMLPModelCfg(
+        hidden_dims=[400, 200, 100],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
+    )
+    critic = RslRlMLPModelCfg(
+        hidden_dims=[400, 200, 100],
+        activation="elu",
+        obs_normalization=True,
+    )
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.2,
+        entropy_coef=0.005,
+        num_learning_epochs=5,
+        num_mini_batches=4,
+        learning_rate=1.0e-3,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.01,
+        max_grad_norm=1.0,
+    )
+
+
+@configclass
 class ASIMOV1VelocityPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     """Separate experiment_name from the standing task -- checkpoints land in their own
     logs/rsl_rl/asimov1_velocity/ directory, never mixing with the stand-and-balance lineage (same

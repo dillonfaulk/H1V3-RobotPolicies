@@ -21,7 +21,7 @@ import torch
 from typing import TYPE_CHECKING, Sequence
 
 from isaaclab.assets import Articulation, RigidObject
-from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg, TerminationTermCfg
+from isaaclab.managers import CurriculumTermCfg, ManagerTermBase, RewardTermCfg, SceneEntityCfg, TerminationTermCfg
 from isaaclab.utils.math import euler_xyz_from_quat, quat_apply, quat_apply_inverse, wrap_to_pi, yaw_quat
 
 if TYPE_CHECKING:
@@ -171,6 +171,57 @@ def feet_contact_force_limit(
     force_mag = torch.norm(forces, dim=-1)
     excess = torch.clamp(force_mag - max_force, min=0.0)
     return torch.sum(excess, dim=1)
+
+
+def feet_only_contact_bonus(
+    env: ManagerBasedRLEnv,
+    feet_sensor_cfg: SceneEntityCfg,
+    pelvis_sensor_cfg: SceneEntityCfg,
+    standing_height: float,
+    transition_width: float = 0.15,
+    contact_threshold: float = 20.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Rewards the specific CONTACT PATTERN of standing: BOTH feet registering real ground-contact force
+    AND the pelvis registering NONE -- a direct signal for "properly supported only by the feet," distinct
+    from every other reward in this task, which infers posture indirectly from height/orientation/joint
+    angles. User's own idea after run 14 showed the whole population converged on sitting (visually
+    confirmed via a live screenshot) despite excellent height/orientation metrics: height/orientation alone
+    can't tell "sitting with a perfectly upright torso" apart from "standing," since both can satisfy
+    those numerically -- an actual ground-contact PATTERN can.
+
+    Uses this asset's real `contact_forces` sensor (not a proxy) -- but scoped to what it actually has
+    PhysX contact-report coverage on, confirmed at this asset's one-time USD conversion: feet + pelvis
+    only (see `CONTACT_SENSOR_AVAILABLE_BODIES`). A literal thigh/femur-contact check (the user's other
+    suggested signal) isn't available without re-converting the asset's USD, a bigger lift not done this
+    session -- pelvis-contact-ABSENCE is used here as the best available proxy for "not sitting/lying on
+    the butt or thighs," since lying/sitting postures reliably load the pelvis against the ground while a
+    genuine standing posture does not.
+
+    **Height-gated after a verification check showed the raw contact pattern alone fires on ~70-83% of
+    steps for a largely RANDOM policy**, even after raising `contact_threshold` 1.0 -> 20.0 (a real load-
+    bearing requirement, not just incidental touch) barely moved it (83% -> 72%). Root cause: "feet
+    touching with force, pelvis not" is satisfied by plenty of ordinary floor postures too -- e.g. lying
+    prone with the hips arched slightly off the ground while splayed legs press into it. Same lesson
+    OpenHorizon's own equivalent reward (`feet_contact_when_high`) already encodes: they always gate it on
+    proximity to standing height (their `standing_gate`), never reward the raw contact pattern alone. Added
+    the identical phase-gate mechanism this file already uses elsewhere (`knee_bend_phase_bonus`/
+    `final_pose_phase_penalty`) -- ramps 0->1 as height approaches `standing_height`, so only a contact
+    pattern achieved WHILE ALSO meaningfully elevated counts.
+    """
+    feet_sensor: ContactSensor = env.scene.sensors[feet_sensor_cfg.name]
+    feet_force = feet_sensor.data.net_forces_w.torch[:, feet_sensor_cfg.body_ids, :]
+    both_feet_contact = (torch.norm(feet_force, dim=-1) > contact_threshold).all(dim=1)
+
+    pelvis_sensor: ContactSensor = env.scene.sensors[pelvis_sensor_cfg.name]
+    pelvis_force = pelvis_sensor.data.net_forces_w.torch[:, pelvis_sensor_cfg.body_ids, :]
+    pelvis_contact = (torch.norm(pelvis_force, dim=-1) > contact_threshold).any(dim=1)
+
+    asset: Articulation = env.scene[asset_cfg.name]
+    height = asset.data.root_pos_w.torch[:, 2]
+    phase = torch.clamp((height - (standing_height - transition_width)) / transition_width, min=0.0, max=1.0)
+
+    return (both_feet_contact & ~pelvis_contact).float() * phase
 
 
 def foot_airborne_exceeded(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, max_air_time: float) -> torch.Tensor:
@@ -498,4 +549,660 @@ class InsufficientProgressTermination(ManagerTermBase):
             self._ref_pos[window_closed] = current_pos[window_closed]
             self._steps_since_ref[window_closed] = 0
 
-        return insufficient
+
+##
+# Fall-recovery (getup) task terms
+##
+
+
+def _upright_factor(asset: Articulation) -> torch.Tensor:
+    """`-gravity_z` clamped to [0, 1] -- 1.0 fully vertical, 0.0 at/past horizontal. Shared by every
+    height-based reward below (see their own docstrings for why this is needed): pelvis height achieved
+    while badly tilted (e.g. via head/shoulder leverage against the ground) should not pay full height
+    credit. Same underlying quantity `apply_assist_force`'s own upright gate uses, just unparameterized
+    (no `min_upright` threshold) since a REWARD should stay smooth/proportional rather than cliff-edged.
+    """
+    return torch.clamp(-asset.data.projected_gravity_b.torch[:, 2], min=0.0, max=1.0)
+
+
+def height_tracking_exp(
+    env: ManagerBasedRLEnv, target_height: float, std: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Exponential-kernel height-tracking reward, scaled by how upright the robot currently is. Stock
+    `isaaclab.envs.mdp.base_height_l2` is a pure L2 penalty with no stock exponential-kernel equivalent --
+    mirrors `track_lin_vel_xy_exp`'s exact shape instead, since a graded exp kernel (vs. a harsh L2
+    penalty) is a better fit for a task where almost every initial state starts far from the target height.
+
+    **The upright scaling was added after run 10's `kneel_height_tracking` (same structural shape, see
+    `height_milestone_exp`) re-triggered the ORIGINAL A-pose exploit** -- confirmed live and in the logs:
+    iteration 721->1036, `orientation_upright` collapsed 1.49->0.02 while `kneel_height_tracking` spiked
+    0.20->1.84 (near max) -- the robot discovered that head/shoulder-leverage against the ground raises
+    pelvis height fast, and NEITHER `height_tracking` nor `height_milestone_exp` ever checked orientation,
+    so that leverage paid full height credit regardless of posture. This is the THIRD time the exact same
+    root cause has bitten this task (runs 1-7's original A-pose; run 8's assist force subsidizing it;
+    now `kneel_height_tracking` re-opening it) -- fixed structurally here instead of patching a 4th
+    symptom: any height-based reward now scales by `_upright_factor`, so raising the pelvis while tilted
+    over (not just while cleanly climbing) earns proportionally less, closing the loophole at its source
+    rather than only in whichever specific mechanism last exploited it.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    height_error = torch.square(asset.data.root_pos_w.torch[:, 2] - target_height)
+    return torch.exp(-height_error / std**2) * _upright_factor(asset)
+
+
+def height_milestone_exp(
+    env: ManagerBasedRLEnv, target_height: float, std: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """One-sided variant of `height_tracking_exp`, for use with an INTERMEDIATE waypoint target instead of
+    the final goal height. `height_tracking_exp`'s full two-sided exp kernel is a symmetric bell curve --
+    correct when `target_height` IS the actual final objective (reward decreasing on either side of the
+    target is exactly right there), but actively WRONG for a milestone the robot is expected to climb PAST:
+    confirmed via a real verification run where a `height_tracking_exp`-based sit-height term saturated
+    near its max while the real height_tracking term (target=standing height) stayed flat -- the sit-height
+    term's own reward was mathematically decreasing as the robot continued climbing past it, fighting the
+    actual goal the whole time, not just risking it.
+
+    This version only penalizes being BELOW target_height (error clamped to >=0) -- reward ramps up to
+    full credit approaching the target from below, then STAYS at full credit for any height AT OR ABOVE
+    it, so there's no incentive to come back down and no penalty for continuing to climb past it.
+
+    Also scaled by `_upright_factor` -- see `height_tracking_exp`'s own docstring for why (this is the
+    function `kneel_height_tracking`/`sit_height_tracking` both route through, and `kneel_height_tracking`
+    specifically is what re-triggered the head-leverage exploit in run 10).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    height_error = torch.clamp(target_height - asset.data.root_pos_w.torch[:, 2], min=0.0)
+    return torch.exp(-torch.square(height_error) / std**2) * _upright_factor(asset)
+
+
+class StabilityHoldBonus(ManagerTermBase):
+    """Rewards CONSECUTIVE steps where height and orientation both sit near the standing target.
+
+    Direct code answer to a known failure mode in getup RL (HoST, arXiv:2502.08378): a policy that briefly
+    pops upright for one frame then immediately collapses can still accrue reward from per-step height/
+    orientation terms alone. The counter here resets to zero the instant stability breaks, so a real, HELD
+    getup is the only thing that pays out -- popping up and falling back down earns ~nothing.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self._consecutive_stable_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._consecutive_stable_steps[env_ids] = 0
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        target_height: float = 0.63,
+        height_tolerance: float = 0.08,
+        tilt_tolerance: float = 0.3,
+        required_hold_steps: int = 25,
+    ) -> torch.Tensor:
+        num_envs = self.asset.data.root_quat_w.torch.shape[0]
+        up_local = torch.tensor([0.0, 0.0, 1.0], device=self.device).expand(num_envs, 3)
+        up_world = quat_apply(self.asset.data.root_quat_w.torch, up_local)
+        tilt_mag = torch.norm(up_world[:, :2], dim=1)
+        height = self.asset.data.root_pos_w.torch[:, 2]
+        stable = (tilt_mag < tilt_tolerance) & (torch.abs(height - target_height) < height_tolerance)
+        self._consecutive_stable_steps = torch.where(
+            stable, self._consecutive_stable_steps + 1, torch.zeros_like(self._consecutive_stable_steps)
+        )
+        return torch.clamp(self._consecutive_stable_steps.float() / required_hold_steps, max=1.0)
+
+
+class SitDwellPenalty(ManagerTermBase):
+    """Continuous (never hard-terminating) penalty that GROWS the longer the robot dwells anywhere below
+    near-standing height without making real climbing progress -- covers lying on the back/front near the
+    floor AND resting at the sitting/kneeling waypoints with one mechanism, per the user's explicit request
+    after run 11 ("tighten up the penalty for sitting too long... or staying on their backs for too long").
+
+    Tracks each env's height against a reference that only refreshes the instant real progress is detected
+    (so genuine climbing resets the clock rather than accruing penalty). A `_dwell_steps` counter grows
+    while (a) height is below `max_height` and (b) at least `grace_steps` have passed since the last reset
+    (a brief settle window -- the robot just free-fell and needs a moment before any "stalling" judgment is
+    fair) and (c) no real progress has happened since the last refresh; it resets to 0 the instant any of
+    those breaks. The returned penalty ramps 0->max_penalty over `window_steps` of continuous stalling.
+
+    Deliberately graded, not a hard termination -- `StalledRecoveryTermination`/`HeadGroundTermination`
+    (both still in this file, never wired in) already proved a hard pass/fail progress check fires
+    universally before any skill exists to pass it with, collapsing every episode to the same early length.
+    A continuous penalty doesn't truncate the episode even if it fires near-universally early in training
+    (same as `upper_body_ground_penalty`'s own precedent of being near-universal early on, which has never
+    been a problem) -- it just shifts the reward baseline down uniformly without destroying the learning
+    signal, a far milder failure mode if the parameters turn out too aggressive.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self._dwell_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self._ref_height = self.asset.data.root_pos_w.torch[:, 2].clone()
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._dwell_steps[env_ids] = 0
+        self._ref_height[env_ids] = self.asset.data.root_pos_w.torch[env_ids, 2]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        max_height: float = 0.55,
+        min_progress: float = 0.03,
+        window_steps: int = 120,
+        grace_steps: int = 60,
+        max_penalty: float = 1.0,
+    ) -> torch.Tensor:
+        height = self.asset.data.root_pos_w.torch[:, 2]
+        below_ceiling = height < max_height
+        past_grace = env.episode_length_buf > grace_steps
+        progressed = (height - self._ref_height) > min_progress
+
+        self._ref_height = torch.where(progressed, height, self._ref_height)
+        active = below_ceiling & past_grace
+        self._dwell_steps = torch.where(
+            progressed | ~active, torch.zeros_like(self._dwell_steps), self._dwell_steps + 1
+        )
+        dwell_fraction = torch.clamp(self._dwell_steps.float() / window_steps, max=1.0)
+        return dwell_fraction * max_penalty * active.float()
+
+
+def upper_body_ground_penalty(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target_height: float
+) -> torch.Tensor:
+    """Continuous penalty against the given bodies (head/shoulder region) being low -- discourages using
+    that region as a ground prop, the mechanism that enables the "A-pose" local optimum (head/shoulders
+    down + legs forming the other points of a stable tripod, confirmed live via training video).
+
+    NOTE: there is no separate head rigid body on this asset -- the URDF's 2-DOF neck
+    (`neck_yaw_link_fixed`/`neck_pitch_link_fixed`) is unactuated and both fixed joints got merged into
+    `waist_yaw_link` during this asset's one-time URDF->USD conversion (`--merge-joints`), confirmed via a
+    direct rigid-body probe (no "head"/"neck" link exists in the converted asset's body list at all). This
+    is meant to be called with BOTH `waist_yaw_link` and both `*_shoulder_pitch_link` bodies, giving a much
+    better approximation of "head/shoulders near the ground" than the torso alone.
+
+    REPLACES an earlier `torso_near_ground_penalty` version that used a fixed `min_height` threshold
+    (clamp-based, zero penalty once above it) -- a real run showed the logged penalty shrinking toward zero
+    over training while the user kept visually observing persistent head-resting live, meaning the robot
+    had found a resting configuration where tracked body height stayed just above that threshold without
+    the behavior actually stopping. This version is threshold-free and fully graded instead: penalty scales
+    continuously with how far below `target_height` (the robot's own standing-height estimate) the tracked
+    bodies sit, with NO height at which the penalty bottoms out to exactly zero before actually standing --
+    removes the whole class of "found a resting height just above the cutoff" exploit.
+
+    Deliberately a continuous PENALTY, not a termination -- this task has no terminations besides time_out
+    by design (see module/env-cfg docstrings): most random fall orientations land with these bodies near
+    the ground immediately, so a termination here would end nearly every episode before the robot has any
+    chance to react.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    tracked_height = asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2].mean(dim=1)
+    return torch.clamp(target_height - tracked_height, min=0.0)
+
+
+def knee_bend_phase_bonus(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, standing_height: float, transition_width: float = 0.15
+) -> torch.Tensor:
+    """Rewards bending the knees while still low/recovering, PENALIZES bent knees once nearly standing --
+    a continuous phase gate keyed on current height, not a hard switch. User's own insight: knee flexion is
+    the natural mechanical lever for pushing up off the ground, but the same bent-knee pose that helps
+    during the climb becomes wasted effort/instability once actually upright, so the incentive needs to
+    flip sign partway through the episode rather than being fixed.
+
+    `phase` ramps linearly from 0 (reward bending) to 1 (penalize bending) as height rises through the
+    `transition_width`-wide band just below `standing_height` -- smooth, not a step function, so there's no
+    sudden incentive flip at one exact height that could itself become exploitable.
+
+    FIXED after a real run showed the SAME class of reward-hacking as `limb_pushoff_bonus` -- by iteration
+    299/300 this had grown to be the single LARGEST reward component (1.47) while height_tracking/
+    stability_hold/torso_upright all stayed essentially flat: rewarding raw knee-deviation MAGNITUDE
+    unconditionally whenever height is low has no requirement that the bending is actually helping, so the
+    policy can farm it by just flexing the knees back and forth while going nowhere. The REWARD side (low
+    height) is now additionally gated on positive CoM vertical velocity, same principle as
+    `limb_pushoff_bonus` -- bending only pays while it coincides with actually rising. The PENALTY side
+    (near standing) is deliberately left UNGATED -- bent knees are wasteful/unstable once upright
+    regardless of instantaneous vertical velocity, there's no equivalent exploit risk to guard against
+    there.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    knee_deviation = torch.sum(
+        torch.abs(asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids]),
+        dim=1,
+    )
+    height = asset.data.root_pos_w.torch[:, 2]
+    phase = torch.clamp((height - (standing_height - transition_width)) / transition_width, min=0.0, max=1.0)
+    rising = torch.clamp(asset.data.root_lin_vel_w.torch[:, 2], min=0.0)
+    reward_component = knee_deviation * (1.0 - phase) * rising
+    penalty_component = knee_deviation * phase
+    return reward_component - penalty_component
+
+
+def limb_pushoff_bonus(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Rewards actively loading the given limbs (hands/knees, via `sensor_cfg`) WHILE the robot is actually
+    rising -- the intended mechanism for "use your hands/knees to push off the ground."
+
+    Uses `joint_wrench`'s per-body reaction-force VERTICAL (Z) COMPONENT ONLY, clamped to positive, as a
+    proxy for "pushing down into the ground through this limb" -- this is joint reaction load, not a
+    direct ground-contact-force reading (this asset's `contact_forces` sensor only has the PhysX
+    contact-report API active on 3 bodies -- feet + pelvis -- confirmed via a direct crash when the
+    fall-recovery task first tried to use it on the full 8-body set; knees/wrists/waist never had it
+    enabled at this asset's one-time USD conversion).
+
+    FIXED after a real run showed reward-hacking: the original version summed full 3D force MAGNITUDE,
+    which any vigorous, uncoordinated thrashing (confirmed live -- "doing the worm") can trigger just as
+    easily as a genuine push, since lateral/rotational loading from flailing counts exactly the same as a
+    deliberate downward push. Restricting to the clamped vertical component only counts force in the
+    specific direction that could mechanically explain pushing the body upward, making it much harder for
+    non-vertical thrashing to trigger spuriously.
+
+    GATED on positive CoM vertical velocity specifically so this can't be farmed by just resting weight on
+    a limb while static -- only effort that COINCIDES WITH rising counts, matching the same "no reward for
+    camping in a convenient pose" principle as `StabilityHoldBonus` above.
+    """
+    sensor = env.scene.sensors[sensor_cfg.name]
+    force = sensor.data.force.torch[:, sensor_cfg.body_ids]
+    vertical_force = torch.clamp(force[..., 2], min=0.0)
+    total_effort = torch.sum(vertical_force, dim=1)
+    asset: Articulation = env.scene[asset_cfg.name]
+    rising = torch.clamp(asset.data.root_lin_vel_w.torch[:, 2], min=0.0)
+    return total_effort * rising
+
+
+def hand_pushoff_force_bonus(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    min_force: float = 30.0,
+    max_force: float = 150.0,
+) -> torch.Tensor:
+    """Rewards a DECISIVE vertical push-off force through the hand end-effectors specifically, graded
+    between `min_force` and `max_force` -- a threshold-shaped bonus, unlike `limb_pushoff_bonus`'s
+    unconditional linear-in-force reward (which also covers knees, combined). Added per the user's own
+    insight after run 13: robots are currently either sitting or doing a belly-down worm -- neither
+    involves a deliberate hands-push phase bridging those two states ("get their feet underneath them").
+
+    Uses the SAME two gates `limb_pushoff_bonus` already proved safe (vertical-force-component-only,
+    positive rising CoM velocity) -- the exact fixes that closed the original thrashing exploit (run 3)
+    apply equally to any new hand-force reward, not just the original term, so this doesn't reopen that
+    risk. The `min_force`/`max_force` ramp (instead of rewarding any positive force, however small) is the
+    new piece here -- credits a clearly decisive push, not token/incidental hand contact. Both thresholds
+    are first-pass guesses (no measured per-hand push-force data for this asset) -- watch the logged
+    magnitude on the verification check before trusting them on a live run, same discipline as every other
+    placeholder number in this file.
+    """
+    sensor = env.scene.sensors[sensor_cfg.name]
+    force = sensor.data.force.torch[:, sensor_cfg.body_ids]
+    vertical_force = torch.clamp(force[..., 2], min=0.0)
+    total_force = torch.sum(vertical_force, dim=1)
+    asset: Articulation = env.scene[asset_cfg.name]
+    rising = torch.clamp(asset.data.root_lin_vel_w.torch[:, 2], min=0.0)
+    graded_force = torch.clamp((total_force - min_force) / (max_force - min_force), min=0.0, max=1.0)
+    return graded_force * rising
+
+
+class StalledRecoveryTermination(ManagerTermBase):
+    """Terminates if the robot's height hasn't meaningfully increased over a fixed look-back window --
+    mirrors `InsufficientProgressTermination`'s exact mechanism (walking task, net-displacement-over-a-
+    window) but keyed on height instead of commanded-direction displacement.
+
+    Catches genuine stalling (e.g. resting in an A-pose, or settling into some OTHER equally-comfortable
+    local optimum once the A-pose itself is discouraged by `torso_near_ground_penalty` above) without
+    firing on legitimate pauses: the window is a deliberately generous fixed duration (not a tight
+    per-step check), so briefly holding still mid-maneuver (e.g. repositioning hands/knees before a push)
+    doesn't trip it -- only genuinely going nowhere for the FULL window does.
+
+    Like `InsufficientProgressTermination`, there's no perverse incentive to trigger this on purpose --
+    doing so just ends the episode without achieving anything, and the episode's own reward terms (height_
+    tracking, stability_hold, etc.) already reward the alternative (making progress) far more than this
+    termination's absence would ever be worth.
+    """
+
+    def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        window_time = cfg.params["window_time"]
+        self.window_steps = max(1, round(window_time / env.step_dt))
+        self._ref_height = torch.zeros(self.num_envs, device=self.device)
+        self._steps_since_ref = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self._initialized = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._initialized[env_ids] = False
+        self._steps_since_ref[env_ids] = 0
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg,
+        window_time: float,
+        min_height_gain: float = 0.05,
+    ) -> torch.Tensor:
+        current_height = self.asset.data.root_pos_w.torch[:, 2]
+
+        need_init = ~self._initialized
+        if torch.any(need_init):
+            self._ref_height[need_init] = current_height[need_init]
+            self._steps_since_ref[need_init] = 0
+            self._initialized[need_init] = True
+
+        self._steps_since_ref += 1
+        window_closed = self._steps_since_ref >= self.window_steps
+
+        height_gain = current_height - self._ref_height
+        stalled = window_closed & (height_gain < min_height_gain)
+
+        if torch.any(window_closed):
+            self._ref_height[window_closed] = current_height[window_closed]
+            self._steps_since_ref[window_closed] = 0
+
+        return stalled
+
+
+def orientation_upright_exp(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, std: float
+) -> torch.Tensor:
+    """Graded positive reward for upright orientation, mirroring `height_tracking_exp`'s exact exp-kernel
+    shape -- complements `flat_orientation_l2` (a pure penalty with no corresponding positive pull) the
+    same way `height_tracking_exp` complements `base_height_l2` in the other asimov1 tasks.
+
+    User's own insight after 5 straight runs showed height/orientation both improving but never converting
+    into a held stand: height already gets a strong, graded pull toward the goal via its own exp-kernel
+    bonus; orientation only had the penalty's much flatter gradient once already quite tilted (an L2
+    penalty barely distinguishes "very tilted" from "extremely tilted" -- both just keep growing, no
+    sharpened pull specifically in the "getting close to upright" zone that matters most for actually
+    finishing the climb). Added ALONGSIDE `flat_orientation_l2`, not replacing it -- keep the penalty's
+    unbounded punishment for getting worse, add this reward's sharp gradient for getting close to upright.
+
+    Uses the exact same underlying quantity as `flat_orientation_l2` (squared XY magnitude of the
+    projected gravity vector), just reshaped through an exp kernel instead of returned as a raw penalty.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    tilt_sq = torch.sum(torch.square(asset.data.projected_gravity_b.torch[:, :2]), dim=1)
+    return torch.exp(-tilt_sq / std**2)
+
+
+class HeadGroundTermination(ManagerTermBase):
+    """Terminates if the tracked upper-body bodies (head/shoulder-region proxy -- same body group as
+    `upper_body_ground_penalty`) are still below `min_height` AFTER an initial grace period.
+
+    Direct response to the A-pose persisting across 5 straight runs despite the graded
+    `upper_body_ground_penalty` alone -- user's own explicit request for real teeth: "almost want to
+    terminate if the head touches the ground."
+
+    The grace period is what makes a hard termination here safe where `StalledRecoveryTermination` above
+    was NOT safe to add from iteration 0: that one judged "has enough progress happened," which is
+    universally true/false for a policy with no learned behavior yet (so it fired on 100% of episodes
+    regardless of parameters). This one judges a simple, momentary geometric fact (are these bodies up or
+    down) that's naturally FALSE for most of a random policy's early steps too -- but gated behind a grace
+    period, so the one thing every single episode is guaranteed to do (settle somewhere after the initial
+    random-orientation drop) never counts against it. Only genuinely being back down there AFTER having
+    had real time to not be does.
+    """
+
+    def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        grace_period = cfg.params["grace_period"]
+        self.grace_steps = max(1, round(grace_period / env.step_dt))
+        self._episode_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._episode_steps[env_ids] = 0
+
+    def __call__(
+        self, env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, grace_period: float, min_height: float
+    ) -> torch.Tensor:
+        self._episode_steps += 1
+        tracked_height = self.asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2].mean(dim=1)
+        past_grace = self._episode_steps > self.grace_steps
+        return past_grace & (tracked_height < min_height)
+
+
+def final_pose_phase_penalty(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, standing_height: float, transition_width: float = 0.15
+) -> torch.Tensor:
+    """Penalizes deviation from the robot's own default joint pose (its intended standing configuration --
+    asimov-1's all-zero joint pose IS its standing pose, confirmed from the asset's own init_state) -- but
+    ONLY once height is already near standing_height, via the same height-gated phase mechanism as
+    `knee_bend_phase_bonus`.
+
+    User's own insight: `height_tracking`/`orientation_upright`/`stability_hold` all check WHERE the pelvis
+    is and HOW TILTED the torso is, but none of them check whether the actual JOINT CONFIGURATION resembles
+    a correct, stable standing pose -- the robot could satisfy height+tilt with legs crossed, asymmetric
+    knees, or arms still flailing, and none of those three terms would know the difference.
+
+    CANNOT be active throughout the whole episode (unlike a stand/walk task's own constant
+    `joint_deviation_l1` terms) -- the robot NEEDS to deviate substantially from this exact pose during the
+    early recovery phase (bent knees, raised arms for leverage), so an unconditional pull toward
+    `default_joint_pos` from frame 1 would fight the very recovery motion this task is trying to discover.
+    Phase-gated the same way as `knee_bend_phase_bonus` specifically to avoid a "do nothing, stay near
+    default pose" exploit: deviation is literally ~0 at the very start of every episode (before the policy
+    has done anything), so an ungated version of this would pay the robot for simply not moving.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    deviation = torch.sum(
+        torch.abs(asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids]),
+        dim=1,
+    )
+    height = asset.data.root_pos_w.torch[:, 2]
+    phase = torch.clamp((height - (standing_height - transition_width)) / transition_width, min=0.0, max=1.0)
+    return deviation * phase
+
+
+def sit_torso_alignment_penalty(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, sit_height: float, band_width: float = 0.15
+) -> torch.Tensor:
+    """Penalizes the non-leg joints (waist_yaw, hip_yaw, hip_roll, shoulders, elbows, wrists, ankle_roll)
+    deviating from their default (facing-forward, symmetric) pose -- but ONLY while near the SIT_HEIGHT
+    waypoint, via a Gaussian BAND gate centered on `sit_height` (not the one-sided ramp
+    `final_pose_phase_penalty`/`knee_bend_phase_bonus` use toward STANDING_HEIGHT -- sitting is a transient
+    waypoint the robot passes THROUGH on the way to standing, not a final target to settle at and stay
+    above, so this gate must turn back OFF once the robot climbs on past it, unlike the one-sided versions).
+
+    Direct answer to the user's own live observation after run 7: once robots reliably reach the sitting
+    waypoint, the torso is twisted/rotated (improved over that run from fully-backwards to half-cocked-
+    sideways, never fully resolved). `final_pose_phase_penalty` doesn't help here -- it's gated on proximity
+    to STANDING_HEIGHT (phase ~0 this low) and is effectively off during sitting.
+
+    Deliberately targets ONLY the joints that should sit at their default value regardless of sit-vs-stand
+    (waist_yaw/hip_yaw/hip_roll/shoulders/elbows/wrists/ankle_roll -- a facing-forward, symmetric torso is
+    correct whether sitting or standing) -- EXCLUDES hip_pitch/knee/ankle_pitch, the joints that MUST
+    deviate from default to actually sit. This means the reward can reuse `default_joint_pos` directly as
+    the target (same array `final_pose_phase_penalty` uses), no new/invented seated-pose joint array needed
+    -- just a different joint SUBSET and a different height GATE shape.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    deviation = torch.sum(
+        torch.abs(asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids]),
+        dim=1,
+    )
+    height = asset.data.root_pos_w.torch[:, 2]
+    gate = torch.exp(-torch.square((height - sit_height) / band_width))
+    return deviation * gate
+
+
+# attribute on the env holding the current assist-force scale in [0, 1] -- written by AssistCurriculum,
+# read every step by apply_assist_force.
+ASSIST_SCALE_ATTR = "asimov1_assist_scale"
+
+# attributes holding apply_assist_force's own progress-window state (reference height snapshot + the
+# common_step_counter it was taken at) -- see that function's own docstring for the progress-gate mechanism.
+ASSIST_PROGRESS_REF_ATTR = "asimov1_assist_progress_ref_height"
+ASSIST_PROGRESS_WINDOW_START_ATTR = "asimov1_assist_progress_window_start"
+
+
+def apply_assist_force(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int] | None,
+    asset_cfg: SceneEntityCfg,
+    max_weight_fraction: float,
+    min_upright: float = 0.3,
+    progress_gate_min_height: float = 0.1,
+    progress_window_steps: int = 180,
+    min_progress: float = 0.03,
+) -> None:
+    """Upward lift force on `asset_cfg`'s body = (current assist scale) * max_weight_fraction * robot weight
+    * an UPRIGHT GATE * a PROGRESS GATE.
+
+    Upright gate: zero while badly tilted, ramping (squared) up to full lift once the robot is already
+    within `min_upright` of vertical.
+
+    Ported from OpenHorizon's HoST-inspired assist-force curriculum (openhorizon-labs/asimov-v1-policies,
+    `src/asimov_policies/tasks/getup/mdp.py` `apply_assist_force`/`assist_curriculum`) -- their getup policy
+    reaches 100% sim success using exactly this mechanism, not reward-shaping alone: physically assist
+    standing up early in training, then decay the assist as the measured success rate rises. Worth porting
+    because 7 straight runs here steadily improved height/orientation/sitting-waypoint metrics but NEVER
+    broke `stability_hold` away from ~0 -- strong evidence the remaining gap needs a different KIND of
+    intervention than more reward shaping, and this is a real, verified-working example of exactly that.
+
+    **The upright gate was added after run 8's FIRST launch (unconditional lift, matching OpenHorizon's own
+    literal implementation) made the A-pose problem WORSE, not better -- confirmed live.** At iteration
+    697/1500, `assist/scale` was still pinned at 1.0 (zero decay the whole run) while `height_tracking`
+    (1.52) and `sit_height_tracking` (1.99, maxed) were both artificially high despite `torso_upright`
+    sitting at -0.61 (worse than run 7's final -0.45) and `assist/success_rate` staying exactly 0.0 across
+    ~31 full episodes. Root cause: `height_tracking`/`sit_height_tracking` only check pelvis Z, with no
+    orientation precondition -- an unconditional external lift on the pelvis pays out on both of those
+    reward terms regardless of body orientation, so a robot resting in an A-pose (head/shoulders down,
+    pelvis as the tripod's high point) gets its pelvis height propped up for free, directly subsidizing the
+    exact resting exploit `upper_body_ground_penalty` already fights, rather than helping escape it. OpenHorizon
+    doesn't have this failure mode visibly because their `height_progress` reward also tracks HEAD height
+    (which stays low in an A-pose-style posture) -- we have no equivalent reward (no head rigid body on this
+    asset, only a penalty-side proxy, `upper_body_ground_penalty`), so gating the force itself at the source
+    is the more direct fix here. `min_upright=0.3` (`-gravity_z` -- 1.0 fully vertical, 0.0 horizontal/lying
+    on its side) means roughly anything tilted more than ~70 degrees from vertical (including fully prone)
+    gets ZERO lift; above that it ramps up quadratically (sharper cutoff than linear) to full assist at fully
+    upright -- the intent is "help finish the last stretch of standing once you're already oriented roughly
+    correctly," not "prop up pelvis height in any posture."
+
+    Progress gate: added after run 9 plateaued for the back half of the run (iteration 817->1499: height_
+    tracking 0.55->0.52, sit_height_tracking 1.84->1.83, assist/scale pinned at 1.0 the ENTIRE run) -- the
+    upright gate correctly stopped the A-pose exploit, but let a NEW comfortable rest state through: sitting
+    bolt-upright satisfies the upright gate fully, so the robot gets the full lift forever just for sitting
+    still, with nothing pushing it to spend extra effort climbing further. Fixed the same way `limb_pushoff_
+    bonus`/`knee_bend_phase_bonus` were already fixed earlier this session -- gate on ACTIVE EFFORT
+    (continuing to climb), not a static condition alone. Tracks height against a periodically-refreshed
+    reference (global cadence, `progress_window_steps` control steps -- fine since this task's only
+    termination is `time_out`, so every env resets in sync, same simplifying assumption `AssistCurriculum`
+    already uses); if height hasn't risen by at least `min_progress` since that reference, the gate fades.
+
+    Deliberately does NOT enforce this below `progress_gate_min_height` -- full assist regardless of recent
+    progress while still near the floor, so the early climb (the part assist is MOST needed for) is never
+    handicapped by a progress check. This is the same class of hazard that killed `StalledRecoveryTermination`
+    and `HeadGroundTermination` earlier this session (a progress/fact check applied before any skill exists
+    to pass it with fires universally) -- but the consequence here is far milder (less bonus assist, not an
+    ended episode), and restricting it to ABOVE a height the robot has already demonstrably reached removes
+    most of that risk: by the time height exceeds `progress_gate_min_height`, the policy has already shown
+    it can produce that much climb on its own at least once.
+
+    Applied every control step via an `interval` EventTerm with `interval_range_s=(env_step_dt, env_step_dt)`
+    and `is_global_time=True` -- Isaac Lab's EventManager has no literal "every step" mode the way mjlab
+    (OpenHorizon's framework) does, but setting the interval bounds equal to the control step makes the
+    countdown hit its resample threshold every single step (confirmed from `event_manager.py`'s own interval
+    logic: `time_left -= dt` then resample+fire the instant `time_left < 1e-6`) -- functionally identical.
+
+    Uses `asset.permanent_wrench_composer.set_forces_and_torques_index` (the current, non-deprecated
+    external-wrench API, confirmed via the quadcopter task's own real usage of it) rather than the
+    deprecated `set_external_force_and_torque` wrapper.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    scale = float(getattr(env, ASSIST_SCALE_ATTR, 0.0))
+    height = asset.data.root_pos_w.torch[:, 2]
+
+    upright = torch.clamp(-asset.data.projected_gravity_b.torch[:, 2], min=0.0, max=1.0)
+    upright_gate = torch.clamp((upright - min_upright) / (1.0 - min_upright), min=0.0, max=1.0) ** 2
+
+    # lazily init + periodically refresh the progress-window reference (global cadence -- see docstring).
+    if not hasattr(env, ASSIST_PROGRESS_REF_ATTR) or (
+        env.common_step_counter - getattr(env, ASSIST_PROGRESS_WINDOW_START_ATTR) >= progress_window_steps
+    ):
+        setattr(env, ASSIST_PROGRESS_REF_ATTR, height.clone())
+        setattr(env, ASSIST_PROGRESS_WINDOW_START_ATTR, env.common_step_counter)
+    ref_height = getattr(env, ASSIST_PROGRESS_REF_ATTR)
+    progress = torch.clamp(height - ref_height, min=0.0)
+    progress_factor = torch.clamp(progress / min_progress, min=0.0, max=1.0)
+    # blend: full pass (1.0) below progress_gate_min_height, ramping to progress_factor above it -- so the
+    # progress requirement only ever engages once the robot has already climbed past the floor.
+    height_gate = torch.clamp((height - progress_gate_min_height) / 0.05, min=0.0, max=1.0)
+    progress_gate = torch.lerp(torch.ones_like(progress_factor), progress_factor, height_gate)
+
+    total_mass = asset.data.body_mass.torch.sum(dim=1)  # (num_envs,)
+    forces = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
+    forces[:, 0, 2] = scale * max_weight_fraction * total_mass * 9.81 * upright_gate * progress_gate
+    torques = torch.zeros_like(forces)
+    asset.permanent_wrench_composer.set_forces_and_torques_index(forces=forces, torques=torques, body_ids=asset_cfg.body_ids)
+
+
+class AssistCurriculum(ManagerTermBase):
+    """Decays the assist-force scale (see `apply_assist_force`) as the measured standing-success rate rises.
+
+    Direct port of OpenHorizon's `assist_curriculum` class. Counts episode-ends over a window of
+    `window_steps` env steps (our task's only termination is `time_out`, so every env resets in sync every
+    `episode_length_s` -- unlike OpenHorizon's possibly-staggered resets, so `window_steps` just needs to be
+    at most one episode's worth of steps to catch each synchronized reset burst). At the end of each window,
+    if the fraction of ended episodes that were "standing" (pelvis above `min_pelvis_height`, torso upright
+    past `min_upright`, both feet in contact) exceeds `success_threshold`, the scale drops by `decay_step`
+    (floor 0). "Standing" here is a one-step check at the moment of reset, not a held-duration success
+    metric like `stability_hold`'s own counter -- deliberately simpler, matching OpenHorizon's own
+    definition (`cmdp.standing_mask`), not reusing `stability_hold`'s internal state (keeps this curriculum
+    decoupled from a specific reward term's own bookkeeping).
+
+    The scale is NOT stored in checkpoints (matches OpenHorizon's own design choice) -- a resumed run starts
+    again from `initial_scale` and decays quickly if the policy is already good enough to clear the
+    threshold immediately.
+    """
+
+    def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._ended = 0
+        self._stood = 0
+        self._window_start = 0
+        self._last_rate = 0.0
+        setattr(env, ASSIST_SCALE_ATTR, float(cfg.params["initial_scale"]))
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        env_ids: Sequence[int] | slice,
+        initial_scale: float,
+        decay_step: float,
+        success_threshold: float,
+        window_steps: int,
+        min_pelvis_height: float,
+        min_upright: float,
+        feet_sensor_cfg: SceneEntityCfg,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    ) -> dict[str, float]:
+        del initial_scale
+        # skip the very first reset (before any step has happened) -- nobody has had a chance yet.
+        if env.common_step_counter > 0:
+            asset: Articulation = env.scene[asset_cfg.name]
+            pelvis_height = asset.data.root_pos_w.torch[env_ids, 2]
+            upright = -asset.data.projected_gravity_b.torch[env_ids, 2]
+            sensor = env.scene.sensors[feet_sensor_cfg.name]
+            forces = sensor.data.net_forces_w.torch[env_ids][:, feet_sensor_cfg.body_ids, :]
+            feet_in_contact = (torch.norm(forces, dim=-1) > 1.0).all(dim=-1)
+            standing = (pelvis_height > min_pelvis_height) & (upright > min_upright) & feet_in_contact
+
+            self._ended += int(standing.numel())
+            self._stood += int(standing.sum().item())
+            if env.common_step_counter - self._window_start >= window_steps and self._ended > 0:
+                self._last_rate = self._stood / self._ended
+                scale = float(getattr(env, ASSIST_SCALE_ATTR))
+                if self._last_rate > success_threshold and scale > 0.0:
+                    setattr(env, ASSIST_SCALE_ATTR, max(0.0, scale - decay_step))
+                self._ended = self._stood = 0
+                self._window_start = env.common_step_counter
+
+        return {"scale": float(getattr(env, ASSIST_SCALE_ATTR)), "success_rate": self._last_rate}

@@ -1,0 +1,141 @@
+{
+  "robot": "asimov-1",
+  "isaac_lab_version": "v3.0.0-beta2.patch1",
+  "training_run": "runs14-17 (resumed lineage, 15996 total iterations)",
+  "source_file": "asimov1_fallrecovery_validated.pt",
+  "source_sha256": "fa3ce027786620c38093d27a76043a8ade6611f0599f1bc02aeb30bebfb262dd",
+  "converted_at_utc": "2026-10-17T04:48:04+00:00",
+  "iteration": 15996,
+  "epoch": null,
+  "actor_tensor_shapes": {
+    "obs_normalizer._mean": [
+      1,
+      76
+    ],
+    "obs_normalizer._var": [
+      1,
+      76
+    ],
+    "obs_normalizer._std": [
+      1,
+      76
+    ],
+    "obs_normalizer.count": [],
+    "distribution.std_param": [
+      23
+    ],
+    "mlp.0.weight": [
+      400,
+      76
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      23,
+      100
+    ],
+    "mlp.6.bias": [
+      23
+    ]
+  },
+  "critic_tensor_shapes": {
+    "obs_normalizer._mean": [
+      1,
+      127
+    ],
+    "obs_normalizer._var": [
+      1,
+      127
+    ],
+    "obs_normalizer._std": [
+      1,
+      127
+    ],
+    "obs_normalizer.count": [],
+    "mlp.0.weight": [
+      400,
+      127
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      1,
+      100
+    ],
+    "mlp.6.bias": [
+      1
+    ]
+  },
+  "other_tensor_shapes": {},
+  "non_tensor_keys": [
+    "actor_state_dict",
+    "critic_state_dict",
+    "infos",
+    "iter",
+    "optimizer_state_dict"
+  ],
+  "obs_dim": 76,
+  "action_dim": 23,
+  "obs_normalization": {
+    "type": "empirical",
+    "mean": "see obs_normalizer._mean in actor.safetensors (actor) / full.safetensors (critic) -- not inlined here, these are 76-dim (actor) and 127-dim (critic) vectors",
+    "var": "see obs_normalizer._var in actor.safetensors (actor) / full.safetensors (critic) -- not inlined here",
+    "source": "RSL-RL EmpiricalNormalization, obs_normalization=True -- the FIRST checkpoint in this whole project trained this way (every other asimov1/v1x1/BDX-R checkpoint used obs_normalization=False, confirmed \"none\" in their own metadata.json). Changed for this task specifically after comparing against OpenHorizon's own getup-specific PPO config (openhorizon-labs/asimov-v1-policies), which also uses obs_normalization=True for getup (differing from their own locomotion policy). A deployer MUST apply this normalizer before feeding observations to the actor -- raw unnormalized observations will NOT work correctly with this checkpoint, unlike every other checkpoint in this repo."
+  },
+  "command_ranges": null,
+  "control_hz": 60,
+  "action_scale": 0.5,
+  "reward_shape_lineage": "Isaac-Asimov1-FallRecovery-v0 (getup task) -- 17 training runs total this session. Runs 1-13: plain PPO, 1500 iter each, fresh starts, progressively fixed an A-pose local optimum (runs 1-7), a sitting-waypoint plateau (runs 9-11), a head-leverage exploit re-triggered by a kneeling waypoint (run 10), and tuned a sit-dwell penalty (runs 12-13). Runs 14-17: switched to OpenHorizon-matched PPO hyperparameters (entropy_coef 0->0.005, obs_normalization False->True, lr 5e-4->1e-3) plus a contact-pattern reward (feet_only_contact) and a hand-pushoff bonus, then RESUMED across all 4 runs (14->15->16->17, same lineage, no fresh restarts) for 15996 total iterations. The combination of a HoST-inspired assist-force curriculum (upward lift on the pelvis, gated on orientation+climbing-progress, decaying as measured standing-success rate rises) with the longer/higher-entropy training budget is what broke the plateau: success_rate went from 0 (zero successes in runs 1-13) to 0.89 (89%) by the end of run 17, with assist/scale fully decayed to 0.0 (policy succeeds completely unassisted).",
+  "notes": "First-ever successful checkpoint for the asimov-1 fall-recovery (getup) task: lying on the ground (random full-SO(3) orientation, random position) -> sit upright -> kneel -> stand, fully unassisted by the training-time assist force. 89% success rate (pelvis height + upright + both feet in contact, simultaneously, held) at the end of training. Not yet tested on hardware or validated via a dedicated play-script visual review session the way other project milestones were -- flagged here as a training-time result, same honesty standard as every other checkpoint in this repo.",
+  "onnx_export": {
+    "obs_dim": 76,
+    "action_dim": 23,
+    "hidden_dims": [
+      400,
+      200,
+      100
+    ],
+    "activation": "elu",
+    "opset_version": 18,
+    "excluded_actor_keys": [
+      "distribution.std_param",
+      "obs_normalizer._mean",
+      "obs_normalizer._std",
+      "obs_normalizer._var",
+      "obs_normalizer.count"
+    ],
+    "verified_against_pytorch": true,
+    "max_abs_diff_vs_pytorch": 5.7220458984375e-06,
+    "WARNING_obs_normalization_not_baked_in": "actor.onnx excludes the obs_normalizer tensors (see excluded_actor_keys above) -- it is the raw MLP only. Unlike every other checkpoint in this repo (all obs_normalization=False, so this never mattered), THIS checkpoint needs its observations normalized (subtract obs_normalizer._mean, divide by obs_normalizer._std -- both saved in actor.safetensors) BEFORE being fed to actor.onnx, or it will produce wrong actions. The PyTorch verification above (max_abs_diff_vs_pytorch) only confirms the raw MLP math matches -- it does NOT confirm end-to-end correctness on unnormalized real observations. Same open problem OpenHorizon's own docs flag for their getup policy export (their docs/obs_action_spec.md: \"Observation normalization is learned ... and must be baked into the exported ONNX (Phase 7)\", listed as not yet done on their side either). Prefer actor.safetensors (which includes the normalizer tensors) for any real deployment until this is fixed."
+  }
+}
