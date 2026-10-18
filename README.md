@@ -69,6 +69,9 @@ isaaclab/                    # mirrors Isaac Lab's own directory structure exact
     play_asimov1_fallrecovery.py         # watch a fall-recovery checkpoint play back live
     play_asimov1_cmd_vel.py              # ROS2 /cmd_vel teleop bridge for asimov-1
     play_v1x1_cmd_vel.py                 # ROS2 /cmd_vel teleop bridge for v1x1
+    play_asimov1_phase_stitch.py         # live walk->fall->recover->walk phase-machine demo, see below
+    asimov1_phase_stitch/                # phase-machine package: gates, obs assembly, policy loading,
+                                          # push testing, status/control HTTP server (used by the above)
   source/isaaclab_assets/isaaclab_assets/robots/
     asimov1.py                # ASIMOV1_CFG articulation config (actuator gains, joint limits, etc.)
     v1x1.py                   # V1X1_CFG articulation config
@@ -169,6 +172,23 @@ Run it live:
 ```
 
 **Known open items**: landings are still visibly a little rough (the training-time assist force gave a noticeable "moon gravity" boost once a robot got upright, which inflated the final pose's joint-deviation penalty - this mostly self-corrected as the assist decayed to 0 over the course of run 17, but final pose quality is still the roughest-looking part of a successful attempt). Not yet tested on real hardware or against the stricter multi-session visual-review bar other checkpoints in this repo were held to before being called "validated" - call this a strong training-time result, not a fully closed-out milestone yet.
+
+## asimov-1: policy-stitching phase machine (walk -> fall -> recover -> walk)
+
+Chains the walking and fall-recovery checkpoints into one continuous live loop in a single simulated robot: walk, get pushed over, detect the fall, recover, resume walking. A sensor-gated state machine (not a learned transition), mirroring the pattern `openhorizon-labs/asimov-v1-policies` (a separate project, same robot) proved in sim.
+
+Run it live:
+```bash
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play_asimov1_phase_stitch.py \
+    --walk_checkpoint /path/to/asimov1_omni_quality_run2_validated/actor.safetensors \
+    --recovery_checkpoint /path/to/asimov1_fallrecovery_validated/actor.safetensors \
+    --status_port 8800 --auto_push_interval_s 20 --viz kit
+```
+Status/control while running: `curl localhost:8800/status`, `curl -X POST localhost:8800/control/push`, `curl -X POST localhost:8800/control/reset`.
+
+**Status**: working well, not perfect - roughly 3-4 clean recover-to-walk cycles out of every 5 attempts, each running well beyond the 4s no-refall success bar once stable. Two real bugs were found and fixed via direct live testing before reaching this point: the walking policy's real action scale is 0.5 (not 0.25, a different policy's value from the design brief this was built from), and an action-blend added at the recovery-to-walk handoff turned out to be actively harmful (averaging a standing-pose target with a gait-pose target produces a weak, indecisive intermediate command) - removing it roughly doubled the success rate. The training-time gravity-lift assist mechanism (environment-level, not part of either checkpoint) is also explicitly forced off for this demo, since it isn't part of either policy's real validated behavior.
+
+**Known open items**: the remaining ~1-in-5 failures are suspected to be leftover joint velocity at the handoff moment (only root angular velocity is currently checked before handing off) and/or too aggressive an initial walk command right after recovery - both flagged as cheap next things to try before considering retraining either policy with more starting-state domain randomization.
 
 ## v1x1: training status
 
