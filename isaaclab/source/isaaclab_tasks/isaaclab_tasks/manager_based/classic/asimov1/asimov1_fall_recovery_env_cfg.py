@@ -422,6 +422,78 @@ class RewardsCfg:
             "gate_height": 0.9 * STANDING_HEIGHT,
         },
     )
+    # NEW -- a sharper, targeted follow-up to recovery_pose_alignment above, added after a direct
+    # per-joint/per-handoff diagnostic on the LIVE phase-stitch demo (not a guess): logged the full
+    # joint-position vector at every real RECOVER->WALK handoff, success and fail, and found 2 of 6
+    # observed failures had a hip_roll LEFT-RIGHT asymmetry z-score of +9.0/+14.9 against the success
+    # population -- a massive, specific outlier that recovery_pose_alignment's own aggregate 23-joint L2
+    # sum was diluting (one bad joint barely moves a sum dominated by 22 others). See
+    # recovery_hip_symmetry_l2's own docstring (mdp.py) for the full methodology and the 3:1 hip_roll:
+    # hip_yaw ratio (hip_yaw showed the same pattern more weakly, max z ~3.9). weight=-3.0 is a first-pass
+    # placeholder sized to be a meaningful penalty on the observed pathological asymmetry (~0.36 rad) while
+    # staying near-zero for the success population's own near-symmetric poses (std ~0.024 rad) --
+    # flagged for tuning off this run's own logged magnitude like every other placeholder in this file.
+    recovery_hip_symmetry = RewTerm(
+        func=asimov1_mdp.recovery_hip_symmetry_l2,
+        weight=-3.0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[
+                    "left_hip_roll_joint", "right_hip_roll_joint",
+                    "left_hip_yaw_joint", "right_hip_yaw_joint",
+                ],
+                preserve_order=True,
+            ),
+            "gate_height": 0.9 * STANDING_HEIGHT,
+            "hip_roll_weight": 3.0,
+            "hip_yaw_weight": 1.0,
+        },
+    )
+    # NEW -- direct answer to the user's own live observation of "tippy-tapping" feet and overall
+    # "wiggling" right after a real handoff. See RecoveryFeetPlantedBonus's own docstring (mdp.py) for why
+    # neither recovery_pose_alignment (continuous position signal, foot contact is discrete) nor
+    # feet_only_contact_bonus (wrong threshold/no memory across steps) already caught this. Uses the same
+    # contact_forces sensor + light 1.0N threshold `gates.py`'s own standing_reached check uses (NOT
+    # feet_only_contact_bonus's heavier 20N "bearing real weight" threshold -- that would miss a foot
+    # lightly grazing mid-tap). weight=2.0 matches recovery_pose_alignment's own weight -- a real primary
+    # signal, not a minor nudge, since both target the same "settled handoff pose" goal from different
+    # angles (continuous position vs. discrete contact pattern).
+    recovery_feet_planted = RewTerm(
+        func=asimov1_mdp.RecoveryFeetPlantedBonus,
+        weight=2.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces", body_names=["left_ankle_roll_link", "right_ankle_roll_link"]
+            ),
+            "gate_height": 0.9 * STANDING_HEIGHT,
+            "contact_threshold": 1.0,
+            "required_ticks": 30,
+        },
+    )
+    # NEW -- direct answer to a real confirmed gap, not a guess: BOTH a live per-handoff diagnostic AND
+    # re-checking the training log's own math (the logged recovery_pose_alignment value is WEIGHTED --
+    # dividing out weight=2.0 gives a much more modest ~0.48 raw average) independently show the knees
+    # sitting near 0.0 in every handoff, nowhere near WALKING_HANDOFF_TARGET_JOINT_POS's bent-knee target
+    # (0.38/-0.38) -- directly matching the user's own live observation. Same dilution problem as
+    # hip_roll before recovery_hip_symmetry was added, same fix pattern, different joint pair. See
+    # recovery_knee_bend_l2's own docstring (mdp.py) for the full reasoning. weight=-2.0 is a first-pass
+    # placeholder (typical current deviation ~0.38 rad per knee, squared+summed ~0.289, so this contributes
+    # roughly -0.58 at the observed starting point -- meaningful relative to stability_hold's own ~3.9, not
+    # dominant) -- watch the logged magnitude on this run before trusting it further.
+    recovery_knee_bend = RewTerm(
+        func=asimov1_mdp.recovery_knee_bend_l2,
+        weight=-2.0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot", joint_names=["left_knee_joint", "right_knee_joint"], preserve_order=True
+            ),
+            "gate_height": 0.9 * STANDING_HEIGHT,
+            "target_left": 0.38,
+            "target_right": -0.38,
+        },
+    )
 
     # wide-body contact-force ceiling -- reused UNMODIFIED (confirmed not feet-specific despite the name, it
     # only ever reads sensor_cfg.body_ids generically). Phase-1-relaxed weight, ramped in CurriculumCfg.

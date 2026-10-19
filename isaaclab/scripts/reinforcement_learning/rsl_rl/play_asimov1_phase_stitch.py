@@ -55,13 +55,40 @@ parser.add_argument(
     default=20.0,
     help="Seconds between automatic test pushes while walking (0 disables).",
 )
+parser.add_argument(
+    "--joint_diag_log",
+    type=str,
+    default=None,
+    help="If set, append one JSON line per RECOVER->WALK handoff to this file: the full 23-joint "
+    "position vector at the handoff instant, plus its eventual outcome (SUCCESS/FAIL) and the time "
+    "to that outcome. Diagnostic only -- for finding which joint(s) correlate with handoff failure, "
+    "since root-level gates (height/upright/ang_speed) showed zero separation in earlier analysis. "
+    "Written with an explicit flush after every record (not relying on stdout's own buffering), so "
+    "data survives even a SIGKILL -- SIGINT is still the clean way to stop, same as always.",
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+# Force line-buffered stdout -- found via a real data-loss bug: on a long run (800+ seconds), Python's
+# default FULL buffering when stdout is redirected to a file meant the final buffer's worth of
+# [phase_stitch] transition lines (confirmed: ~330s/several handoffs' worth in one real case) never made
+# it to disk, even with a clean SIGINT shutdown (`except KeyboardInterrupt` + `env.close()` is a normal
+# Python exit, which DOES flush stdio atexit -- but Kit's own C++-level teardown during
+# `simulation_app.close()` apparently got there first for the trailing buffer in practice, confirmed by
+# directly comparing this script's own transition-count against `--joint_diag_log`'s explicitly-flushed
+# record count on the same real run: 41 counted here vs. 47 actually written). Line-buffering flushes
+# after every newline instead of waiting for a full buffer, closing this gap without needing a flush=True
+# on every single print() call in the file.
+import sys
+
+sys.stdout.reconfigure(line_buffering=True)
+
 # everything below needs the simulation app already running -- this ordering is the actual fix.
+import json
+
 import torch
 
 import gymnasium as gym
@@ -138,6 +165,12 @@ def _ramped_command(sim_time: float, reentry_t: float | None, device: str) -> to
     return torch.tensor([cmd], device=device)
 
 
+def _append_diag_record(path: str, record: dict) -> None:
+    with open(path, "a") as f:
+        f.write(json.dumps(record) + "\n")
+        f.flush()
+
+
 def main():
     cfg = ASIMOV1FallRecoveryEnvCfg()
     cfg.scene.num_envs = 1
@@ -177,6 +210,11 @@ def main():
     state = PhaseState()
     start_status_server(state, args_cli.status_port)
 
+    if args_cli.joint_diag_log:
+        joint_names = env.action_manager.get_term("joint_pos")._joint_names
+        _append_diag_record(args_cli.joint_diag_log, {"joint_names": joint_names})
+        print(f"[phase_stitch] joint diagnostic logging enabled -> {args_cli.joint_diag_log}")
+
     env.reset()
     phase = "WALK"
     last_action_walk = torch.zeros(1, 23, device=device)
@@ -187,6 +225,7 @@ def main():
     walk_reentry_t = None
     sim_time = 0.0
     handoff_action = torch.zeros(1, 23, device=device)  # last SCALED action applied before a WALK handoff
+    pending_diag = None  # {"t": handoff sim_time, "joint_pos": [...]} between a handoff and its outcome
     blend_tick = BLEND_TICKS  # >= BLEND_TICKS means "not currently blending"
 
     print("[phase_stitch] ready, starting WALK phase.")
@@ -200,6 +239,7 @@ def main():
                     last_action_walk = torch.zeros(1, 23, device=device)
                     walk_reentry_t = sim_time
                     blend_tick = BLEND_TICKS  # fresh env.reset() needs no blend, already a clean pose
+                    pending_diag = None  # a manual reset abandons any unresolved handoff -- neither outcome applies
                 if do_push and phase == "WALK":
                     push.apply_push(env)
 
@@ -228,6 +268,11 @@ def main():
                         phase = "FALL"
                         settle_timer = 0.0
                         state.fall_count += 1
+                        if args_cli.joint_diag_log and pending_diag is not None:
+                            _append_diag_record(args_cli.joint_diag_log, {
+                                **pending_diag, "outcome": "FAIL", "dt": round(sim_time - pending_diag["t"], 3),
+                            })
+                            pending_diag = None
                     state.update(phase, vals, sim_time)
 
                 elif phase == "FALL":
@@ -259,6 +304,11 @@ def main():
                     standing, vals = gates.standing_reached(env)
                     standing_hold_ticks = standing_hold_ticks + 1 if standing else 0
                     if standing_hold_ticks >= gates.STAND_HOLD_TICKS:
+                        if args_cli.joint_diag_log:
+                            pending_diag = {
+                                "t": sim_time,
+                                "joint_pos": env.scene["robot"].data.joint_pos.torch[0].tolist(),
+                            }
                         if ZERO_JOINT_VEL_AT_HANDOFF:
                             asset = env.scene["robot"]
                             asset.write_joint_velocity_to_sim_index(velocity=torch.zeros_like(asset.data.joint_vel.torch))
@@ -275,6 +325,11 @@ def main():
                         state.walk_success_count += 1
                         walk_reentry_t = None
                         print(f"[phase_stitch] t={sim_time:.1f}s recovery cycle CONFIRMED (4s no re-fall)")
+                        if args_cli.joint_diag_log and pending_diag is not None:
+                            _append_diag_record(args_cli.joint_diag_log, {
+                                **pending_diag, "outcome": "SUCCESS", "dt": round(sim_time - pending_diag["t"], 3),
+                            })
+                            pending_diag = None
 
                 sim_time += env.step_dt
     except KeyboardInterrupt:

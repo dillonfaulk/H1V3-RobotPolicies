@@ -1,0 +1,140 @@
+{
+  "robot": "asimov-1",
+  "isaac_lab_version": "v3.0.0-beta2.patch1",
+  "training_run": "asimov1_fallrecovery_stable_validated",
+  "source_file": "model_27490.pt",
+  "source_sha256": "9dfa11a0ed3e5f57591f2f1f0649629b01e6789458d000b85f6c5e1ba43dda80",
+  "converted_at_utc": "2026-10-19T22:32:08+00:00",
+  "iteration": 27490,
+  "epoch": null,
+  "actor_tensor_shapes": {
+    "obs_normalizer._mean": [
+      1,
+      76
+    ],
+    "obs_normalizer._var": [
+      1,
+      76
+    ],
+    "obs_normalizer._std": [
+      1,
+      76
+    ],
+    "obs_normalizer.count": [],
+    "distribution.std_param": [
+      23
+    ],
+    "mlp.0.weight": [
+      400,
+      76
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      23,
+      100
+    ],
+    "mlp.6.bias": [
+      23
+    ]
+  },
+  "critic_tensor_shapes": {
+    "obs_normalizer._mean": [
+      1,
+      127
+    ],
+    "obs_normalizer._var": [
+      1,
+      127
+    ],
+    "obs_normalizer._std": [
+      1,
+      127
+    ],
+    "obs_normalizer.count": [],
+    "mlp.0.weight": [
+      400,
+      127
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      1,
+      100
+    ],
+    "mlp.6.bias": [
+      1
+    ]
+  },
+  "other_tensor_shapes": {},
+  "non_tensor_keys": [
+    "actor_state_dict",
+    "critic_state_dict",
+    "infos",
+    "iter",
+    "optimizer_state_dict"
+  ],
+  "obs_dim": 76,
+  "action_dim": 23,
+  "obs_normalization": {
+    "type": "empirical",
+    "mean": "see obs_normalizer._mean in actor.safetensors (actor) / full.safetensors (critic) -- not inlined here",
+    "var": "see obs_normalizer._var in actor.safetensors (actor) / full.safetensors (critic) -- not inlined here",
+    "source": "RSL-RL EmpiricalNormalization, obs_normalization=True -- unchanged from every prior checkpoint in this task's lineage. A deployer MUST apply this normalizer before feeding observations to the actor."
+  },
+  "command_ranges": null,
+  "control_hz": 60,
+  "action_scale": 0.5,
+  "reward_shape_lineage": "Isaac-Asimov1-FallRecovery-v0 -- resumed from asimov1_fallrecovery_posealign_validated (iteration 21493, 88.0% phase-stitch handoff success) across 3 further resumed runs, all chained, 27490 total iterations. All three driven by a NEW per-handoff joint-position diagnostic added this session (play_asimov1_phase_stitch.py --joint_diag_log): logs the full 23-joint vector at every real RECOVER->WALK handoff, tagged with its eventual outcome, so each fix below was confirmed against real failure data, not guessed.\n- Retrain #5 (21493->23492, +2000 iter): added recovery_hip_symmetry_l2 (penalizes LEFT-RIGHT hip_roll/hip_yaw asymmetry, weight=-3.0/ratio 3:1) after the diagnostic found 2 of 6 observed failures had a hip_roll asymmetry z-score of +9.0/+14.9 against the success population (std ~0.024 rad) -- a massive, specific outlier that the existing aggregate recovery_pose_alignment term (sums error across all 23 joints into one signal) was diluting. Handoff success rose 88.0% -> 89.4% (corrected number -- see the stdout-truncation bug note below).\n- Retrain #6 (23492->25491, +2000 iter): added recovery_feet_planted (RecoveryFeetPlantedBonus, mirrors StabilityHoldBonus's consecutive-counter pattern but tracks CONTINUOUS foot ground-contact specifically, weight=2.0, required_ticks=30) after the user's own live observation of visible foot-tapping and overall body-wiggling post-recovery -- confirmed there is NO push mechanism in this task's training at all, so the wiggling was the policy's own learned behavior, not a disturbance response. Handoff success rose to 90.0% (corrected). An EARLIER attempt in this same session (feet_slide + recovery_position_drift at full weight) REGRESSED the rate to 61.5% despite correctly reducing visible sliding -- rolled back, weights halved, paired with recovery_pose_alignment (added the session before this one) which pulls the final joint config toward WALKING_HANDOFF_TARGET_JOINT_POS.\n- Retrain #7 (25491->27490, +2000 iter, THIS CHECKPOINT): added recovery_knee_bend_l2 (penalizes absolute knee-bend deviation from the walking policy's own 0.38/-0.38 target, weight=-2.0) after discovering BOTH success and fail handoffs showed knees sitting near 0.0 (straight), nowhere near target, despite recovery_pose_alignment logging near its max WEIGHTED value (0.96-0.97) -- the raw term value is that divided by its own weight=2.0, ~0.48, a much more modest number once correctly unweighted, consistent with the knees being persistently off-target the whole episode. Result: handoff success held flat at 90.0% (tied with retrain #6) -- the reward engaged during training (-0.44 to -0.47 average) but did NOT change the actual knee value at the exact handoff instant. A follow-up zero-retraining test (raising the phase-stitch script's own STAND_HOLD_TICKS from 3 to 20, to test whether more settle time before handoff would help) got the robot stuck in RECOVER for 100+ seconds and was reverted -- the knee-bend-at-handoff gap remains unresolved, flagged as a known open item.\nAlso found and fixed in this session: a real measurement bug in play_asimov1_phase_stitch.py's own stdout transition log (silently lost data on long runs, confirmed by cross-checking against the new --joint_diag_log file's own explicitly-flushed record count) -- fixed via sys.stdout.reconfigure(line_buffering=True). The originally-reported 90.2%/91.7% numbers for retrains #5/#6 were inflated by this bug; the numbers above are the corrected ones.",
+  "notes": "Best validated fall-recovery checkpoint as of 2026-10-19. Policy-stitching handoff success progression this session: 88.0% (prior session's best) -> 89.4% -> 90.0% (this checkpoint, tied with retrain #6). Paired with asimov1_omni_robustness_validated (walking checkpoint, unchanged this session) for all measurements. Known open item: knee-bend joint values at the exact handoff instant remain near-straight (~0.0) despite a direct, confirmed-working reward term penalizing this -- see reward_shape_lineage above for the full investigation. Not yet tested on real hardware.",
+  "onnx_export": {
+    "obs_dim": 76,
+    "action_dim": 23,
+    "hidden_dims": [
+      400,
+      200,
+      100
+    ],
+    "activation": "elu",
+    "opset_version": 18,
+    "excluded_actor_keys": [
+      "distribution.std_param",
+      "obs_normalizer._mean",
+      "obs_normalizer._std",
+      "obs_normalizer._var",
+      "obs_normalizer.count"
+    ],
+    "verified_against_pytorch": true,
+    "max_abs_diff_vs_pytorch": 1.1444091796875e-05
+  }
+}

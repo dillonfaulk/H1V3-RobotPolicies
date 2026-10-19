@@ -657,6 +657,68 @@ class StabilityHoldBonus(ManagerTermBase):
         return torch.clamp(self._consecutive_stable_steps.float() / required_hold_steps, max=1.0)
 
 
+class RecoveryFeetPlantedBonus(ManagerTermBase):
+    """Rewards CONSECUTIVE steps where BOTH feet maintain continuous ground contact (no lift-off), once
+    already near-standing -- a direct answer to the user's own live observation of visible "tippy-tapping"
+    (micro foot-lift jitter) and overall "wiggling" quality right after a real phase-stitch handoff.
+
+    Why neither existing mechanism already caught this: `recovery_pose_alignment_exp`'s aggregate 23-joint
+    L2 distance is a CONTINUOUS position signal, and a brief foot-tap (lift+replant within a fraction of a
+    second) barely moves a joint-angle sum averaged over an entire episode's worth of steps -- foot contact
+    is fundamentally a DISCRETE on/off pattern, not well-represented by continuous position error.
+    `feet_only_contact_bonus` checks the right SENSOR but the wrong THRESHOLD/purpose (20N, tuned to
+    distinguish "bearing real standing weight" from "sitting on the pelvis," not "is the foot airborne at
+    all") and has no memory across steps, so it can't distinguish sustained double-support from rapid
+    tap-tap-tap (each individual tap-down moment could still register >20N transiently).
+
+    Mirrors `StabilityHoldBonus`'s own consecutive-counter pattern (same file, same anti-exploit
+    discipline): the counter resets to 0 the instant EITHER foot loses contact, so a policy that taps and
+    replants gets no more credit than one that's still airborne -- only genuinely SUSTAINED double-support
+    pays out, same "popping up then immediately losing it earns ~nothing" philosophy `StabilityHoldBonus`
+    already established for height/orientation.
+
+    GATED by height>`gate_height` (same threshold convention as `recovery_pose_alignment_exp`/
+    `recovery_hip_symmetry_l2`) so this doesn't fight the early climb, where feet genuinely need to move/
+    push off the ground -- only matters once already close to standing.
+
+    `contact_threshold=1.0` matches `gates.STAND_CONTACT_THRESHOLD_N`/`AssistCurriculum`'s own
+    feet-in-contact check (a light "touching at all" threshold, not `feet_only_contact_bonus`'s heavier
+    20N "bearing real weight" one -- the right choice here, since even a lightly-grazing foot mid-tap would
+    still count as "in contact" under the heavier threshold, missing exactly the jitter being targeted).
+    `required_ticks=30` (~0.5s at this task's control rate) is an unmeasured placeholder for "settled, not
+    tapping," flagged for tuning off this run's own logged magnitude like every other placeholder here.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self._consecutive_planted = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._consecutive_planted[env_ids] = 0
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        sensor_cfg: SceneEntityCfg,
+        gate_height: float,
+        contact_threshold: float = 1.0,
+        required_ticks: int = 30,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    ) -> torch.Tensor:
+        sensor = env.scene.sensors[sensor_cfg.name]
+        forces = sensor.data.net_forces_w.torch[:, sensor_cfg.body_ids, :]
+        both_planted = (torch.norm(forces, dim=-1) > contact_threshold).all(dim=-1)
+        self._consecutive_planted = torch.where(
+            both_planted, self._consecutive_planted + 1, torch.zeros_like(self._consecutive_planted)
+        )
+        height_gate = (self.asset.data.root_pos_w.torch[:, 2] > gate_height).float()
+        progress = torch.clamp(self._consecutive_planted.float() / required_ticks, max=1.0)
+        return progress * height_gate
+
+
 class SitDwellPenalty(ManagerTermBase):
     """Continuous (never hard-terminating) penalty that GROWS the longer the robot dwells anywhere below
     near-standing height without making real climbing progress -- covers lying on the back/front near the
@@ -1010,6 +1072,85 @@ def recovery_pose_alignment_exp(
     alignment = torch.exp(-pose_error_sq / std**2)
     height_gate = (asset.data.root_pos_w.torch[:, 2] > gate_height).float()
     return alignment * height_gate * _upright_factor(asset)
+
+
+def recovery_hip_symmetry_l2(
+    env: ManagerBasedRLEnv,
+    gate_height: float,
+    hip_roll_weight: float,
+    hip_yaw_weight: float,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalizes LEFT-RIGHT hip asymmetry at the terminal pose specifically -- a sharper, more targeted
+    follow-up to `recovery_pose_alignment_exp` above, added after a direct per-joint/per-handoff diagnostic
+    found that `recovery_pose_alignment_exp`'s own aggregate L2-across-23-joints formulation was diluting
+    exactly this signal: a single badly-off hip_roll joint barely moves a sum that already includes 22
+    other joints, so the policy wasn't meaningfully discouraged from occasionally ending with a lopsided
+    hip even while everything else looked fine.
+
+    CONFIRMED the real failure mode, not guessed: logged the full joint-position vector at every real
+    phase-stitch RECOVER->WALK handoff (success and fail) across a live validation run, computed each
+    joint's z-score against the success population, AND the left+right asymmetry (mirror-symmetric poses
+    satisfy left == -right per this project's own sign convention, so left+right measures genuine
+    imbalance, not just one side's absolute offset). Result: 2 of 6 observed failures showed a hip_roll
+    asymmetry z-score of +9.0 and +14.9 against the success population (std ~0.024 rad) -- a massive,
+    specific outlier, far beyond anything any other joint or the other 4 failures showed. hip_yaw showed
+    the same pattern more weakly (max z ~3.9), included here too at a lower relative weight.
+
+    GATED identically to `recovery_pose_alignment_exp` (height + upright-factor) for the same reason --
+    asymmetric hip angles are completely normal and necessary during the early get-up motion, this should
+    only matter once already close to standing.
+
+    `asset_cfg.joint_ids` MUST resolve in exactly this order: [left_hip_roll, right_hip_roll, left_hip_yaw,
+    right_hip_yaw] -- enforced by the caller passing `joint_names` in that literal order with
+    `preserve_order=True` (same convention this project already uses for feet_separation/feet_crossed).
+    `hip_roll_weight`/`hip_yaw_weight` are a 3:1 ratio reflecting the observed signal strength (hip_roll's
+    own z-scores were roughly 3-4x hip_yaw's) -- a reasoned starting ratio, not a measured optimum.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos.torch[:, asset_cfg.joint_ids]
+    hip_roll_asym_sq = torch.square(joint_pos[:, 0] + joint_pos[:, 1])
+    hip_yaw_asym_sq = torch.square(joint_pos[:, 2] + joint_pos[:, 3])
+    penalty = hip_roll_weight * hip_roll_asym_sq + hip_yaw_weight * hip_yaw_asym_sq
+    height_gate = (asset.data.root_pos_w.torch[:, 2] > gate_height).float()
+    return penalty * height_gate * _upright_factor(asset)
+
+
+def recovery_knee_bend_l2(
+    env: ManagerBasedRLEnv,
+    gate_height: float,
+    target_left: float,
+    target_right: float,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalizes knee-bend deviation from the WALKING policy's own exact target values -- the SAME
+    dilution problem as `recovery_hip_symmetry_l2` above, now confirmed for the knees specifically (not
+    guessed): `recovery_pose_alignment_exp` logs near its max weighted value during training, but a
+    direct re-check of the logged number (the training log reports the WEIGHTED average, i.e.
+    raw_term * weight -- dividing back out the weight=2.0 gives a much more modest ~0.48 raw average) and
+    a live per-handoff diagnostic BOTH independently confirm the knees sit near 0.0 in both successful and
+    failed handoffs, nowhere near `WALKING_HANDOFF_TARGET_JOINT_POS`'s bent-knee target (0.38 left / -0.38
+    right) -- directly matching the user's own live observation ("recovery ends with a more knees straight
+    pose... their knees are super straight"). The aggregate 23-joint L2 sum in
+    `recovery_pose_alignment_exp` was diluting this specific pair's error the same way it diluted hip_roll
+    before `recovery_hip_symmetry_l2` was added -- same root cause, same fix pattern, now applied to a
+    different joint pair found via a different signal (visual inspection + the weight-division math, not
+    the asymmetry-diagnostic script this time).
+
+    Unlike `recovery_hip_symmetry_l2` (penalizes a SYMMETRY violation, left+right != 0), this penalizes
+    deviation from an ABSOLUTE target each side (straight-knee is a real, consistent, single failure mode
+    here, not two sides disagreeing with each other) -- hence separate `target_left`/`target_right` params
+    instead of a symmetry formula.
+
+    GATED identically to `recovery_pose_alignment_exp`/`recovery_hip_symmetry_l2` (height + upright-factor)
+    for the same reason -- straight knees are normal and necessary during the early climb/push-off phase,
+    this should only matter once already close to standing.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos.torch[:, asset_cfg.joint_ids]
+    error_sq = torch.square(joint_pos[:, 0] - target_left) + torch.square(joint_pos[:, 1] - target_right)
+    height_gate = (asset.data.root_pos_w.torch[:, 2] > gate_height).float()
+    return error_sq * height_gate * _upright_factor(asset)
 
 
 class HeadGroundTermination(ManagerTermBase):

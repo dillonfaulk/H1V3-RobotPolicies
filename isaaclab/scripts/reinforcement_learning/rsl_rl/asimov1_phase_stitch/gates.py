@@ -37,15 +37,21 @@ STAND_MIN_UPRIGHT = 0.9  # on -projected_gravity_b[:, 2]
 # which immediately re-triggers the fall detector via its own ang-speed condition. 1.0 gives a real
 # margin below FALL_ANGVEL_RAD_S=2.0 without being strict.
 STAND_MAX_ANG_SPEED = 1.0
-# STAND_HOLD_TICKS: first tried OpenHorizon's own real hold value (2.0s), then this policy's own
-# `StabilityHoldBonus` hold-duration (25 steps ~= 0.417s) -- BOTH got the robot stuck in RECOVER
-# indefinitely. Root cause, confirmed by re-reading this task's own `AssistCurriculum` class
-# directly (not from memory): the 89% success rate this checkpoint actually achieved was measured
-# by a ONE-STEP check at episode-end ("'Standing' here is a one-step check at the moment of reset,
-# not a held-duration success metric" -- AssistCurriculum's own docstring), not any continuous-hold
-# capability -- this script was testing for something strictly harder than what the policy was ever
-# confirmed to deliver. Replaced the hold-duration requirement with a tiny debounce (a few ticks)
-# purely to filter single-frame sensor noise at the threshold boundary, not a stability requirement.
+# STAND_HOLD_TICKS: tiny 3-tick debounce, confirmed the right choice TWICE now. OpenHorizon's own
+# 2.0s hold and this policy's old `StabilityHoldBonus` 25-step hold both got the robot stuck in
+# RECOVER indefinitely early in this project. TRIED AGAIN at 20 ticks later in this same session
+# (after two reward-shape attempts failed to fix the knee-bend-at-handoff value, as a cheap test of
+# whether a longer settle time would help) -- got stuck again just as badly (106+s in RECOVER,
+# ang_speed oscillating well above STAND_MAX_ANG_SPEED the whole time, confirmed live by the user:
+# "he was already waiting a little too long before this change and now its worse"). Even with
+# `recovery_feet_planted`/`stability_hold` now training real continuous-hold behavior (up to
+# 30/25 consecutive ticks respectively), the policy apparently still can't reliably sustain
+# ang_speed<1.0 for 20 CONSECUTIVE ticks in a row -- whatever residual motion it has at the terminal
+# pose is bursty/intermittent, not a smooth settle, so a longer consecutive-tick requirement just
+# means waiting for an increasingly unlikely lucky streak rather than genuinely more settle time.
+# Reverted back to 3 -- this knob is not the fix for the knee-bend timing question; that remains
+# open for a future session (e.g. a dedicated "sustained low ang_speed" reward term might succeed
+# where a phase-machine gate change didn't).
 STAND_HOLD_TICKS = 3
 # feet_in_contact was also part of AssistCurriculum's real 3-condition formula and had been missed
 # here entirely -- added below via a sensor_cfg param, matching the exact asset limitation already
