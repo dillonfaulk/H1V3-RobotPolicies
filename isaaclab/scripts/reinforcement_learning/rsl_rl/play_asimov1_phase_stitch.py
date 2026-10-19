@@ -107,6 +107,36 @@ WALK_DEMO_COMMAND = [0.4, 0.0, 0.0]  # fixed forward-walk command for the demo
 # raise this back up rather than assume.
 BLEND_TICKS = 1
 
+# Queued from last session, tried for the first time now (both cheap, both previously untried):
+#
+# (1) Zero residual joint velocity at the RECOVER->WALK handoff. `gates.standing_reached`'s
+# STAND_MAX_ANG_SPEED check only looks at the robot's ROOT body angular velocity -- individual
+# joint velocities (e.g. a leg still swinging from the recovery policy's own last tick) were never
+# checked or cleared. The walking policy's very first post-handoff step could land on a root state
+# that passes the standing gate while still riding on nonzero joint-space momentum the walking
+# policy never saw at any point in its own training (which always starts from exactly zero joint
+# velocity). Cheap and reversible: clear it explicitly at the handoff instant instead of trusting
+# the existing gate to have implicitly covered it.
+ZERO_JOINT_VEL_AT_HANDOFF = True
+
+# (2) Ramp the walking command back up instead of immediately re-commanding the same confident
+# WALK_DEMO_COMMAND the robot was cruising at before it got pushed over. A linear ramp from
+# WALK_REENTRY_INITIAL_COMMAND up to WALK_DEMO_COMMAND over WALK_REENTRY_RAMP_S seconds of sim time,
+# starting the instant WALK is (re-)entered -- applies uniformly to every WALK entry that sets
+# walk_reentry_t (post-recovery handoff and a manual /control/reset both already set it; the very
+# first WALK phase at script startup does not, and intentionally skips the ramp -- see
+# _ramped_command below).
+WALK_REENTRY_INITIAL_COMMAND = [0.15, 0.0, 0.0]
+WALK_REENTRY_RAMP_S = 2.0
+
+
+def _ramped_command(sim_time: float, reentry_t: float | None, device: str) -> torch.Tensor:
+    if reentry_t is None:
+        return torch.tensor([WALK_DEMO_COMMAND], device=device)
+    frac = min(max((sim_time - reentry_t) / WALK_REENTRY_RAMP_S, 0.0), 1.0)
+    cmd = [start + frac * (end - start) for start, end in zip(WALK_REENTRY_INITIAL_COMMAND, WALK_DEMO_COMMAND)]
+    return torch.tensor([cmd], device=device)
+
 
 def main():
     cfg = ASIMOV1FallRecoveryEnvCfg()
@@ -151,7 +181,6 @@ def main():
     phase = "WALK"
     last_action_walk = torch.zeros(1, 23, device=device)
     last_action_recover = torch.zeros(1, 23, device=device)
-    command_buf = torch.tensor([WALK_DEMO_COMMAND], device=device)
     settle_timer = 0.0
     standing_hold_ticks = 0
     time_since_push = 0.0
@@ -169,7 +198,6 @@ def main():
                     env.reset()
                     phase = "WALK"
                     last_action_walk = torch.zeros(1, 23, device=device)
-                    command_buf = torch.tensor([WALK_DEMO_COMMAND], device=device)
                     walk_reentry_t = sim_time
                     blend_tick = BLEND_TICKS  # fresh env.reset() needs no blend, already a clean pose
                 if do_push and phase == "WALK":
@@ -182,6 +210,7 @@ def main():
                             push.apply_push(env)
                             time_since_push = 0.0
 
+                    command_buf = _ramped_command(sim_time, walk_reentry_t, device)
                     obs = observations.build_walk_obs(env, command_buf, last_action_walk)
                     raw_action = walk_policy.act(obs)
                     last_action_walk = raw_action
@@ -230,9 +259,11 @@ def main():
                     standing, vals = gates.standing_reached(env)
                     standing_hold_ticks = standing_hold_ticks + 1 if standing else 0
                     if standing_hold_ticks >= gates.STAND_HOLD_TICKS:
+                        if ZERO_JOINT_VEL_AT_HANDOFF:
+                            asset = env.scene["robot"]
+                            asset.write_joint_velocity_to_sim_index(velocity=torch.zeros_like(asset.data.joint_vel.torch))
                         phase = "WALK"
                         last_action_walk = torch.zeros(1, 23, device=device)
-                        command_buf = torch.tensor([WALK_DEMO_COMMAND], device=device)
                         time_since_push = 0.0
                         walk_reentry_t = sim_time
                         handoff_action = scaled_action

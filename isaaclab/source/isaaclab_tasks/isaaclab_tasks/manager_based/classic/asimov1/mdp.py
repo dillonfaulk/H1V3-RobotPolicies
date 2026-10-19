@@ -549,6 +549,8 @@ class InsufficientProgressTermination(ManagerTermBase):
             self._ref_pos[window_closed] = current_pos[window_closed]
             self._steps_since_ref[window_closed] = 0
 
+        return insufficient
+
 
 ##
 # Fall-recovery (getup) task terms
@@ -711,6 +713,50 @@ class SitDwellPenalty(ManagerTermBase):
         )
         dwell_fraction = torch.clamp(self._dwell_steps.float() / window_steps, max=1.0)
         return dwell_fraction * max_penalty * active.float()
+
+
+class RecoveryPositionDriftPenalty(ManagerTermBase):
+    """Penalizes net horizontal displacement from wherever the episode started (i.e. where the robot fell),
+    as distinct from per-step foot-sliding (that's `loco_mdp.feet_slide`, reused separately in this task's
+    RewardsCfg). Added per the user's own real-world framing: these robots will eventually do household
+    chores in tight hallways, where "recovers successfully but ends up a meter away from where it fell" is
+    a real functional problem, not a cosmetic one -- confirmed by live observation of the trained policy
+    visibly "scooting" across the floor while getting up.
+
+    Anchors to each env's own root XY position at episode start (right after EventCfg's own random-fall
+    `reset_base` term applies, since ManagerTermBase.reset() always fires after the EventManager's own
+    'reset' mode terms) and penalizes the CURRENT distance from that anchor every step. The anchor-then-
+    diff pattern mirrors `InsufficientProgressTermination`'s own root_pos_w usage in the walking task's
+    mdp.py -- no env_origin subtraction needed, since env_origins is a per-env CONSTANT offset that cancels
+    out in any same-env difference.
+
+    `tolerance` is a dead-zone before any penalty starts (same "measure a real range, don't punish normal
+    behavior" discipline as `shin_vertical`/`torso_vertical`'s own max_tilt tolerances) -- no motion-capture
+    reference exists for this task's getup motion (unlike the AMP walking task's reference clip), so this is
+    a reasoned placeholder (roughly one footstep's length -- minor weight-shift repositioning during a real
+    getup is normal; several footsteps of net travel is the actual "scooting" behavior being targeted),
+    flagged for visual-tuning like every other unmeasured placeholder in this project.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self._anchor_xy = self.asset.data.root_pos_w.torch[:, :2].clone()
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._anchor_xy[env_ids] = self.asset.data.root_pos_w.torch[env_ids, :2]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        tolerance: float = 0.15,
+    ) -> torch.Tensor:
+        current_xy = self.asset.data.root_pos_w.torch[:, :2]
+        drift = torch.norm(current_xy - self._anchor_xy, dim=1)
+        return torch.square(torch.clamp(drift - tolerance, min=0.0))
 
 
 def upper_body_ground_penalty(
@@ -929,6 +975,41 @@ def orientation_upright_exp(
     asset: Articulation = env.scene[asset_cfg.name]
     tilt_sq = torch.sum(torch.square(asset.data.projected_gravity_b.torch[:, :2]), dim=1)
     return torch.exp(-tilt_sq / std**2)
+
+
+def recovery_pose_alignment_exp(
+    env: ManagerBasedRLEnv,
+    target_joint_pos: list[float],
+    std: float,
+    gate_height: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Graded reward for ending the recovery in a joint configuration close to `target_joint_pos` (the
+    WALKING policy's own default/init pose, see `WALKING_HANDOFF_TARGET_JOINT_POS`'s own comment) -- NOT
+    just "any valid standing pose" the way `height_tracking`/`stability_hold`/`orientation_upright` alone
+    require. Added per explicit user insight after watching real phase-stitch handoff failures: the good
+    recoveries looked great, but failures consistently traced back to the recovery's own final pose, not
+    anything visible at the root-body level (height/upright/ang_speed all looked statistically identical
+    between successful and failed handoffs in direct gate-value comparisons) -- this term targets exactly
+    that invisible joint-space gap.
+
+    GATED by height (and smoothly scaled by `_upright_factor`) so this only matters once the robot is
+    already close to standing -- same reasoning as `stability_hold`'s own gating, applying this
+    unconditionally would actively fight the early get-up motion, which necessarily passes through joint
+    configurations nowhere near a walking-ready stance. `gate_height` mirrors the phase-stitch script's own
+    `STAND_MIN_PELVIS_HEIGHT = 0.9 * STANDING_HEIGHT` threshold so the reward and the real inference-time
+    handoff gate roughly agree on what "close to standing" means.
+
+    `std` is an unmeasured placeholder (no prior data on what a "close enough" aggregate joint-space L2
+    distance looks like for this specific pose target) -- flagged for tuning off the first real run's
+    logged magnitude, same discipline as every other placeholder in this file.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    target = torch.tensor([target_joint_pos], device=asset.data.joint_pos.torch.device)
+    pose_error_sq = torch.sum(torch.square(asset.data.joint_pos.torch - target), dim=1)
+    alignment = torch.exp(-pose_error_sq / std**2)
+    height_gate = (asset.data.root_pos_w.torch[:, 2] > gate_height).float()
+    return alignment * height_gate * _upright_factor(asset)
 
 
 class HeadGroundTermination(ManagerTermBase):

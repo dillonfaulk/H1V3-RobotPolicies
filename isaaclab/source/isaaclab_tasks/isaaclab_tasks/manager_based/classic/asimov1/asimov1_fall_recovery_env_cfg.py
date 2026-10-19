@@ -41,6 +41,7 @@ KEY DESIGN DEPARTURES FROM EVERY OTHER ASIMOV1 TASK (read before touching):
 """
 
 import isaaclab.envs.mdp as mdp
+import isaaclab_tasks.manager_based.locomotion.velocity.mdp as loco_mdp
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -78,6 +79,22 @@ CONTACT_SENSOR_AVAILABLE_BODIES = ["left_ankle_roll_link", "right_ankle_roll_lin
 # asimov-1's own default standing-height estimate (see robots/asimov1.py init_state) -- same constant the
 # stand/walk tasks' own base_height reward already uses.
 STANDING_HEIGHT = 0.63
+
+# The WALKING policy's own default/init joint pose (bent-knee "athletic" stance, Menlo's own
+# ASIMOV_1_STANDING_INIT_STATE) -- NOT this task's own all-zero default. Copied verbatim from
+# `WALKING_DEFAULT_JOINT_POS` in `scripts/.../asimov1_phase_stitch/observations.py`, which was itself
+# confirmed by direct instantiation of Isaac-Asimov1-Velocity-AMP-v0 (`env.scene["robot"].data.
+# default_joint_pos`), in the asset-intrinsic joint order (same order `asset.data.joint_pos` uses here --
+# both tasks share the identical ASIMOV1_CFG asset, confirmed earlier this project via a programmatic
+# joint-name comparison). Target for `recovery_pose_alignment_exp` below: added per explicit user insight
+# that the recovery policy's final pose only ever had to look "standing" by this task's own generic
+# height/orientation/stability criteria, with NO notion of matching what the WALKING policy actually
+# expects its own starting joint configuration to look like -- exactly the kind of joint-space mismatch
+# that stayed invisible to every root-level phase-stitch gate while still causing real handoff failures.
+WALKING_HANDOFF_TARGET_JOINT_POS = [
+    -0.13, 0.13, 0.0, 0.0, 0.0, 0.25, -0.25, 0.0, 0.0, 0.05, -0.05, 0.38, -0.38,
+    0.0, 0.0, -0.26, 0.26, -0.4, 0.4, 0.0, 0.0, 0.0, 0.0,
+]
 
 # rough estimate for an upright-SITTING pelvis height (butt on the ground, torso vertical) -- a plausible
 # easier-to-reach intermediate waypoint before standing, per the user's own insight: most real getup
@@ -124,13 +141,19 @@ SIT_TORSO_ALIGNMENT_JOINTS = [
 # assist-force EventTerm fire every single control step (see apply_assist_force's own docstring).
 CONTROL_DT = 2 / 120.0
 
-# assist-force curriculum constants -- ported directly from OpenHorizon's own validated numbers
+# assist-force curriculum constants -- originally ported from OpenHorizon's own validated numbers
 # (openhorizon-labs/asimov-v1-policies, GetUpParams: assist_weight_fraction=0.6, assist_initial_scale=1.0,
-# assist_decay_step=0.05, assist_success_threshold=0.6), NOT yet tuned for this task's own specifics --
-# flagged the same way every other borrowed/estimated number in this file is, watch the logged
-# `Curriculum/assist/*` values on the first real run before trusting these as final.
+# assist_decay_step=0.05, assist_success_threshold=0.6).
+# ASSIST_INITIAL_SCALE dropped 1.0 -> 0.0 per explicit user call after runs 14-17 (89% unassisted) plus
+# this session's two further resumed retrains (both confirmed via their own logged `Curriculum/assist/scale`
+# decaying to 0.0 within the first few hundred iterations of every resume, success_rate already 90%+ by
+# then) -- the bootstrapping role this curriculum was built for is over; keeping it at 1.0 only means every
+# future resumed run wastes its first few hundred iterations re-decaying a crutch the policy no longer
+# needs. Setting the INITIAL value to 0.0 makes the whole assist_force EventTerm a permanent no-op from
+# iteration 0 (apply_assist_force scales its lift force by this value) without deleting the mechanism's own
+# code -- trivially reversible (bump back to 1.0) if a future from-scratch retrain ever needs it again.
 ASSIST_WEIGHT_FRACTION = 0.6
-ASSIST_INITIAL_SCALE = 1.0
+ASSIST_INITIAL_SCALE = 0.0
 ASSIST_DECAY_STEP = 0.05
 ASSIST_SUCCESS_THRESHOLD = 0.6
 # one episode's worth of control steps (12s / CONTROL_DT = 720) -- our only termination is time_out, so
@@ -346,6 +369,59 @@ class RewardsCfg:
 
     # discourage wild flailing -- reused as-is from the walking task, robot-agnostic.
     angular_momentum = RewTerm(func=asimov1_mdp.whole_body_angular_momentum_l2, weight=-0.03)
+
+    # ADDED per explicit user observation (live-watched the trained policy "scoot across the ground with
+    # their feet like sliding a little" while recovering) -- two separate, complementary mechanisms for
+    # two separate aspects of the same visible phenomenon:
+    # (a) per-step foot-DRAGGING while a foot is planted -- reused UNMODIFIED from the walking task, where
+    # it's already proven (same body set, same mechanism, zero new code).
+    # weight HALVED -0.25 -> -0.15 after the first real run: the measured handoff success rate REGRESSED
+    # (80.0% -> 61.5% in the live phase-stitch test) despite the user's own visual confirmation that
+    # sliding itself was visibly reduced -- i.e. this term (plus recovery_position_drift below) was likely
+    # competing against the primary height/pose objectives hard enough to cost handoff quality, a real
+    # multi-objective tradeoff, not noise (failure heights crept back toward the pre-retrain pattern).
+    # Kept active (not removed) since the underlying behavior-shaping direction is confirmed correct by
+    # direct observation -- just needs less relative pull, paired with the new recovery_pose_alignment_exp
+    # term below which targets the ACTUAL handoff-relevant signal (final joint config) more directly.
+    feet_slide = RewTerm(
+        func=loco_mdp.feet_slide,
+        weight=-0.15,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces", body_names=["left_ankle_roll_link", "right_ankle_roll_link"]
+            ),
+            "asset_cfg": SceneEntityCfg("robot", body_names=["left_ankle_roll_link", "right_ankle_roll_link"]),
+        },
+    )
+    # (b) NET horizontal travel away from where the robot fell, over the whole episode -- a real
+    # functional requirement per the user's own framing (household chores in tight hallways can't tolerate
+    # "recovers, but ends up a meter from where it fell"). New stateful term, see
+    # RecoveryPositionDriftPenalty's own docstring in mdp.py for the anchor mechanism and tolerance
+    # reasoning. weight CUT -1.0 -> -0.4 for the same reason as feet_slide's own cut above (measured
+    # handoff regression on the first real run) -- same "keep the direction, reduce the pull" fix.
+    recovery_position_drift = RewTerm(
+        func=asimov1_mdp.RecoveryPositionDriftPenalty,
+        weight=-0.4,
+        params={"asset_cfg": SceneEntityCfg("robot"), "tolerance": 0.15},
+    )
+    # NEW -- targets the ACTUAL handoff-relevant signal directly, added alongside the weight cuts above per
+    # the user's own sharp insight: good recoveries vs. bad ones in the phase-stitch demo weren't
+    # distinguishable by height/upright/ang_speed (confirmed via direct gate-value comparison -- every
+    # failure looked statistically identical to a success on every root-level signal), so the real
+    # remaining gap has to be in the exact final JOINT configuration, not anything visible at the root
+    # level. See recovery_pose_alignment_exp's own docstring (mdp.py) for the gating/std reasoning.
+    # weight=2.0 matches orientation_upright's own weight -- meant as a real primary shaping signal now,
+    # not a minor nudge, since it directly targets the hypothesized root cause rather than a side effect.
+    recovery_pose_alignment = RewTerm(
+        func=asimov1_mdp.recovery_pose_alignment_exp,
+        weight=2.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "target_joint_pos": WALKING_HANDOFF_TARGET_JOINT_POS,
+            "std": 1.5,
+            "gate_height": 0.9 * STANDING_HEIGHT,
+        },
+    )
 
     # wide-body contact-force ceiling -- reused UNMODIFIED (confirmed not feet-specific despite the name, it
     # only ever reads sensor_cfg.body_ids generically). Phase-1-relaxed weight, ramped in CurriculumCfg.

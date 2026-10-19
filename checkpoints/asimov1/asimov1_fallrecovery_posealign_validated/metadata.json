@@ -1,0 +1,140 @@
+{
+  "robot": "asimov-1",
+  "isaac_lab_version": "v3.0.0-beta2.patch1",
+  "training_run": "asimov1_fallrecovery_posealign_validated",
+  "source_file": "model_21493.pt",
+  "source_sha256": "f88c8c993747bd3f7fc9d9c62f9ccefb3f8210cb79022b28b9e1ed9c1d80eb70",
+  "converted_at_utc": "2026-10-19T04:42:19+00:00",
+  "iteration": 21493,
+  "epoch": null,
+  "actor_tensor_shapes": {
+    "obs_normalizer._mean": [
+      1,
+      76
+    ],
+    "obs_normalizer._var": [
+      1,
+      76
+    ],
+    "obs_normalizer._std": [
+      1,
+      76
+    ],
+    "obs_normalizer.count": [],
+    "distribution.std_param": [
+      23
+    ],
+    "mlp.0.weight": [
+      400,
+      76
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      23,
+      100
+    ],
+    "mlp.6.bias": [
+      23
+    ]
+  },
+  "critic_tensor_shapes": {
+    "obs_normalizer._mean": [
+      1,
+      127
+    ],
+    "obs_normalizer._var": [
+      1,
+      127
+    ],
+    "obs_normalizer._std": [
+      1,
+      127
+    ],
+    "obs_normalizer.count": [],
+    "mlp.0.weight": [
+      400,
+      127
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      1,
+      100
+    ],
+    "mlp.6.bias": [
+      1
+    ]
+  },
+  "other_tensor_shapes": {},
+  "non_tensor_keys": [
+    "actor_state_dict",
+    "critic_state_dict",
+    "infos",
+    "iter",
+    "optimizer_state_dict"
+  ],
+  "obs_dim": 76,
+  "action_dim": 23,
+  "obs_normalization": {
+    "type": "empirical",
+    "mean": "see obs_normalizer._mean in actor.safetensors (actor) / full.safetensors (critic) -- not inlined here",
+    "var": "see obs_normalizer._var in actor.safetensors (actor) / full.safetensors (critic) -- not inlined here",
+    "source": "RSL-RL EmpiricalNormalization, obs_normalization=True -- unchanged from asimov1_fallrecovery_validated. A deployer MUST apply this normalizer before feeding observations to the actor."
+  },
+  "command_ranges": null,
+  "control_hz": 60,
+  "action_scale": 0.5,
+  "reward_shape_lineage": "Isaac-Asimov1-FallRecovery-v0 -- resumed from asimov1_fallrecovery_validated (iteration 15996, 89% unassisted success) across 4 further resumed runs this session, all chained (no fresh restarts), 21493 total iterations:\n- Retrain #1 (15996->17495, +1500 iter): NO config changes, just continued training per the same pattern that originally took success_rate from 1% to 89%. Confirmed via the policy-stitching phase-machine demo: RECOVER->WALK handoff success rose 65.7%->69.2%.\n- Retrain #2 (17495->19494, +2000 iter): also NO config changes. Handoff success rose further to 80.0% -- the best checkpoint before any reward-shape change (preserved as a fallback point).\n- Retrain #3 (19494->21493 initial attempt, +2000 iter, SUPERSEDED/not used): added feet_slide (reused from the walking task) + a new RecoveryPositionDriftPenalty (anchors to root XY at episode start = where the robot fell, penalizes net drift past a 0.15m tolerance) at weights -0.25/-1.0, plus disabled the gravity-lift assist curriculum entirely (ASSIST_INITIAL_SCALE 1.0->0.0, confirmed no longer needed -- both recent retrains decayed it to 0.0 within a few hundred resumed iterations). Measured regression: handoff success FELL to 61.5% despite genuinely reducing the visible foot-sliding behavior -- a real example of a correctly-shaped single behavior change not translating to a better aggregate handoff rate. Rolled back to retrain #2's checkpoint rather than building on this one.\n- Retrain #4 (resumed from retrain #2's 19494, +2000 iter, THIS CHECKPOINT): halved feet_slide/drift weights to -0.15/-0.4 (keep the direction, reduce how hard they compete against the primary height/pose objectives), and added a NEW recovery_pose_alignment_exp term (weight=2.0): an exp-kernel reward on joint-space L2 distance to WALKING_HANDOFF_TARGET_JOINT_POS -- the WALKING policy's own exact default/init pose, not just 'any valid standing pose' -- gated by height>0.9*STANDING_HEIGHT so it only applies once already near-standing. This directly targeted the hypothesis that good/bad handoffs were indistinguishable at the root-body level (confirmed via direct gate-value comparison across many handoffs) because the real gap was in the exact final JOINT configuration. Result: handoff success rose to 88.0% (22/25, best of the entire project), with the scooting/sliding also visibly reduced per live observation -- both the aggregate metric and the originally-targeted behavior improved together this time.",
+  "notes": "Best validated fall-recovery checkpoint as of 2026-10-18. Policy-stitching handoff success progression across this session's retrains: 65.7% (baseline, asimov1_fallrecovery_validated) -> 69.2% -> 80.0% -> 61.5% (regression, not used) -> 88.0% (this checkpoint). Paired with asimov1_omni_robustness_validated (the walking checkpoint) for this measurement -- see that checkpoint's own notes for its side of the story. Gravity-lift assist is now a permanent no-op from iteration 0 of training (ASSIST_INITIAL_SCALE=0.0), confirmed unnecessary at this point in the lineage.",
+  "onnx_export": {
+    "obs_dim": 76,
+    "action_dim": 23,
+    "hidden_dims": [
+      400,
+      200,
+      100
+    ],
+    "activation": "elu",
+    "opset_version": 18,
+    "excluded_actor_keys": [
+      "distribution.std_param",
+      "obs_normalizer._mean",
+      "obs_normalizer._std",
+      "obs_normalizer._var",
+      "obs_normalizer.count"
+    ],
+    "verified_against_pytorch": true,
+    "max_abs_diff_vs_pytorch": 1.52587890625e-05
+  }
+}

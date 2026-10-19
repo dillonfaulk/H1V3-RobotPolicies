@@ -100,6 +100,58 @@ class EventCfg(_BaseEventCfg):
         params={"position_range": (0.7, 1.3), "velocity_range": (0.0, 0.0)},
     )
 
+    # ADDED for the asimov1-phase-stitch handoff-robustness push: `reset_joints_by_scale` above multiplies
+    # each joint's DEFAULT position by a random factor -- a genuine blind spot for this specific robot's
+    # bent-knee AMP init pose (ASIMOV1_AMP_INIT_STATE_JOINT_POS in asimov1_velocity_amp_env_cfg.py), which
+    # deliberately parks hip_roll/hip_yaw/ankle_roll/shoulder_yaw/wrist_yaw at EXACTLY 0.0 -- 0 times any
+    # scale is still 0, so these joints have NEVER varied across this policy's entire training history,
+    # confirmed by direct source read of `reset_joints_by_scale` (isaaclab/envs/mdp/events.py:1924). These
+    # are exactly the joints governing lateral balance/foot placement, and exactly what a real (imperfect)
+    # fall-recovery handoff is likely to leave non-centered (confirmed live: ~1/3 of RECOVER->WALK handoffs
+    # in the phase-stitch demo re-fall within ~1s despite root height/upright/ang_speed all looking
+    # statistically identical to successful handoffs -- the mismatch has to be joint-space, not root-space).
+    # Uses `reset_joints_by_offset` (additive bias around default, NOT a multiplicative scale) specifically
+    # so these always-zero joints finally get real variation too. Ranges are a first pass, each sized as a
+    # modest fraction of that joint's own real hard limit (see the printed actuator table's Position Limits
+    # column) rather than one blind constant across joints of very different scale:
+    #   hip_roll/hip_yaw: limit +-0.785 rad each -> +-0.12 rad offset (~15% of range)
+    #   ankle_roll: limit only +-0.100 rad (much smaller joint) -> +-0.04 rad offset (~40% of its own tiny
+    #     range -- a small ABSOLUTE number but a meaningfully large FRACTION, since foot-roll asymmetry is
+    #     specifically the kind of imperfection a real recovery leaves)
+    #   shoulder_yaw/wrist_yaw: limit +-1.571/+-3.142 rad (arms matter far less for balance than legs, but
+    #     filling the same blind spot costs nothing) -> +-0.2 rad offset
+    # velocity_range=(0,0) throughout, matching reset_robot_joints' own convention -- the phase-stitch
+    # script's RECOVER->WALK handoff already explicitly zeros joint velocity (see play_asimov1_phase_stitch.py),
+    # so training should match that real deployment-time condition, not add velocity variation nothing
+    # downstream will ever actually produce.
+    reset_hip_asymmetry = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (-0.12, 0.12),
+            "velocity_range": (0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_roll_joint", ".*_hip_yaw_joint"]),
+        },
+    )
+    reset_ankle_roll_asymmetry = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (-0.04, 0.04),
+            "velocity_range": (0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_roll_joint"]),
+        },
+    )
+    reset_arm_yaw_asymmetry = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (-0.2, 0.2),
+            "velocity_range": (0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_shoulder_yaw_joint", ".*_wrist_yaw_joint"]),
+        },
+    )
+
     # push_robot's forward-biased x-push REVERTED back to symmetric for the SECOND fresh restart, same
     # reasoning as the command range revert above -- isolate the directional-bug fix as the one real change
     # from the first fresh restart's starting config, see if it alone resolves the asymmetry before

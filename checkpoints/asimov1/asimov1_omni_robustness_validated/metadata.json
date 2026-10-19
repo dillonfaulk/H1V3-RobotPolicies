@@ -1,0 +1,159 @@
+{
+  "robot": "asimov-1",
+  "isaac_lab_version": "v3.0.0-beta2.patch1",
+  "training_run": "asimov1_omni_robustness_validated",
+  "source_file": "model_28481.pt",
+  "source_sha256": "1ca225659ec21e56e073ecd8395ef527ac76c1542d69777eb48ea37750e0e6d3",
+  "converted_at_utc": "2026-10-18T21:38:08+00:00",
+  "iteration": 28481,
+  "epoch": null,
+  "actor_tensor_shapes": {
+    "distribution.std_param": [
+      23
+    ],
+    "mlp.0.weight": [
+      400,
+      81
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      23,
+      100
+    ],
+    "mlp.6.bias": [
+      23
+    ]
+  },
+  "critic_tensor_shapes": {
+    "mlp.0.weight": [
+      400,
+      81
+    ],
+    "mlp.0.bias": [
+      400
+    ],
+    "mlp.2.weight": [
+      200,
+      400
+    ],
+    "mlp.2.bias": [
+      200
+    ],
+    "mlp.4.weight": [
+      100,
+      200
+    ],
+    "mlp.4.bias": [
+      100
+    ],
+    "mlp.6.weight": [
+      1,
+      100
+    ],
+    "mlp.6.bias": [
+      1
+    ]
+  },
+  "other_tensor_shapes": {
+    "discriminator.trunk.0.weight": [
+      256,
+      92
+    ],
+    "discriminator.trunk.0.bias": [
+      256
+    ],
+    "discriminator.trunk.2.weight": [
+      256,
+      256
+    ],
+    "discriminator.trunk.2.bias": [
+      256
+    ],
+    "discriminator.linear.weight": [
+      1,
+      256
+    ],
+    "discriminator.linear.bias": [
+      1
+    ],
+    "discriminator.feature_norm._mean": [
+      1,
+      46
+    ],
+    "discriminator.feature_norm._var": [
+      1,
+      46
+    ],
+    "discriminator.feature_norm._std": [
+      1,
+      46
+    ],
+    "discriminator.feature_norm.count": []
+  },
+  "non_tensor_keys": [
+    "actor_state_dict",
+    "critic_state_dict",
+    "discriminator_state_dict",
+    "infos",
+    "iter",
+    "optimizer_state_dict"
+  ],
+  "obs_dim": 81,
+  "action_dim": 23,
+  "obs_normalization": {
+    "type": "none",
+    "mean": null,
+    "var": null,
+    "source": "confirmed: no normalizer tensors in this checkpoint -- trained with empirical_normalization=False, raw observations fed directly to the policy (unchanged from asimov1_omni_quality_run2_validated)."
+  },
+  "command_ranges": {
+    "lin_vel_x": [
+      -0.7,
+      0.8
+    ],
+    "lin_vel_y": [
+      -0.55,
+      0.55
+    ],
+    "ang_vel_z": [
+      -0.8,
+      0.8
+    ]
+  },
+  "control_hz": 60,
+  "action_scale": 0.5,
+  "reward_shape_lineage": "Isaac-Asimov1-Velocity-AMP-v0 -- resumed from asimov1_omni_quality_run2_validated (iteration 26982) for 1500 more iterations (28482 total). NO reward-shape changes -- the actual change was fixing a reset-distribution blind spot in EventCfg.reset_robot_joints: mdp.reset_joints_by_scale multiplies each joint's DEFAULT position by a random factor, but this robot's AMP bent-knee init pose parks hip_roll/hip_yaw/ankle_roll/shoulder_yaw/wrist_yaw at exactly 0.0, so those joints NEVER varied across this policy's entire training history (0 * anything = 0) -- exactly the joints governing lateral balance/foot placement. Added 3 new additive EventTerms (reset_hip_asymmetry, reset_ankle_roll_asymmetry, reset_arm_yaw_asymmetry, via mdp.reset_joints_by_offset) so those joints finally get real startup-pose variation too. Also fixed an unrelated pre-existing bug found while isolation-testing this resume: asimov1/mdp.py's InsufficientProgressTermination was missing a `return` statement (dormant since Oct 15, never triggered because no velocity-task training had run since).",
+  "notes": "Measured effect on the policy-stitching phase-machine demo (walk->fall->recover->walk, chaining this checkpoint with a fall-recovery checkpoint): the standalone walking quality visibly improved live (user: 'falls only seldomly'), training metrics stayed healthy throughout (reward stable ~30-37, no collapse), but the specific RECOVER->WALK handoff success rate was measured FLAT (65.4% vs. 65.7% baseline) -- this fix alone did not move that number. The real gains in handoff success (eventually 65.7% -> 88.0%) came entirely from retraining the FALL-RECOVERY policy, not this one. Kept as the walking half of the best validated phase-stitch pairing regardless, since the underlying robustness fix is real and the walking quality genuinely improved.",
+  "onnx_export": {
+    "obs_dim": 81,
+    "action_dim": 23,
+    "hidden_dims": [
+      400,
+      200,
+      100
+    ],
+    "activation": "elu",
+    "opset_version": 18,
+    "excluded_actor_keys": [
+      "distribution.std_param"
+    ],
+    "verified_against_pytorch": true,
+    "max_abs_diff_vs_pytorch": 2.86102294921875e-06
+  }
+}
