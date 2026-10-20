@@ -1,8 +1,9 @@
 # H1V3-RobotPolicies
 
 <p align="center">
-  <img src="images/asimov1.webp" alt="asimov-1 humanoid" width="45%" />
-  <img src="images/v1x1.png" alt="v1x1 quadruped" width="45%" />
+  <img src="images/asimov1.webp" alt="asimov-1 humanoid" width="30%" />
+  <img src="images/v1x1.png" alt="v1x1 quadruped" width="30%" />
+  <img src="images/bdxr.png" alt="BDX-R bipedal RL training" width="30%" />
 </p>
 
 <p align="center">
@@ -156,6 +157,10 @@ asimov-1's real forward axis is local +X (matches ROS `Twist.linear.x` directly,
 **Important note if touching this asset's visuals**: the robot's materials use Isaac Lab's native instancing (`instanceable=true`) for GPU efficiency across many cloned training environments. USD's instancing rules mean a shared `material:binding` pointing outside a prim's own instanceable subtree gets **silently dropped** at composition time - editing the shared `AsimovGreen`/`AsimovGrey` material definitions has zero effect on the render. Recoloring must be done via each mesh prim's own `displayColor` attribute instead (a plain per-mesh value, not a cross-prim binding, so it isn't subject to the same rule).
 
 ## asimov-1: fall-recovery (getup) training status
+
+<p align="center">
+  <img src="images/asimov1_fallrecovery_demo.gif" alt="asimov-1 fall-recovery demo" width="60%" />
+</p>
 
 Gym id: `Isaac-Asimov1-FallRecovery-v0`. Separate task from standing/walking above - starts from a random fallen pose (full random SO(3) orientation, random position, small velocity jitter) and has to reach a genuine standing pose on its own: lying down -> sit upright -> kneel -> stand. Plain PPO, no AMP (no reference getup motion clip exists for this asset).
 
