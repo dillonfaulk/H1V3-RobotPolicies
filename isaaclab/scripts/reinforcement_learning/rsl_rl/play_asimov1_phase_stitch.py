@@ -56,6 +56,18 @@ parser.add_argument(
     help="Seconds between automatic test pushes while walking (0 disables).",
 )
 parser.add_argument(
+    "--goto",
+    type=str,
+    default=None,
+    help="Semicolon-separated waypoint list in world-frame meters, e.g. '1.5,0.0;1.5,1.5;0.0,1.5' -- "
+    "the v0 go-to-point FSM (asimov1_phase_stitch/goto.py) steers the walking policy's own velocity "
+    "command toward each point in turn via an orient-then-move proportional controller, arriving "
+    "within goto.ARRIVAL_RADIUS_M before advancing to the next. Can also be set/replaced live via "
+    "POST /control/goto {'waypoints': [[x,y], ...]} (or {'x':..,'y':..} for one point) on "
+    "--status_port, without restarting. If unset, falls back to the original fixed WALK_DEMO_COMMAND "
+    "demo behavior.",
+)
+parser.add_argument(
     "--joint_diag_log",
     type=str,
     default=None,
@@ -96,7 +108,7 @@ import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.manager_based.classic.asimov1.asimov1_fall_recovery_env_cfg import ASIMOV1FallRecoveryEnvCfg
 
-from asimov1_phase_stitch import gates, observations, policy_loader, push
+from asimov1_phase_stitch import gates, goto, observations, policy_loader, push
 from asimov1_phase_stitch.status_server import PhaseState, start_status_server
 
 # NOT the brief's/OpenHorizon's own 0.25 -- that's a DIFFERENT policy's value. Confirmed directly
@@ -165,6 +177,45 @@ def _ramped_command(sim_time: float, reentry_t: float | None, device: str) -> to
     return torch.tensor([cmd], device=device)
 
 
+def _resolve_walk_command(
+    env,
+    sim_time: float,
+    reentry_t: float | None,
+    state: PhaseState,
+    device: str,
+    prev_goto_command: torch.Tensor | None,
+) -> tuple[torch.Tensor, dict | None, torch.Tensor | None]:
+    """Picks the WALK-phase command: the v0 go-to-point FSM's output if a goal is currently queued
+    (asimov1_phase_stitch/goto.py), else the original fixed WALK_DEMO_COMMAND demo behavior
+    unchanged (the `reentry_t is None` branch below is byte-identical to the old `_ramped_command`
+    for that case). Returns (command[1,3], goto_vals_or_None, new_prev_goto_command) -- goto_vals and
+    the third element are both None whenever no goal is active, so callers can tell the two cases
+    apart without re-querying state, and the slew-rate state (goto.py's own MAX_DV_PER_TICK/
+    MAX_DW_PER_TICK) naturally resets itself the instant navigation stops.
+    """
+    goal = state.get_current_goal()
+    if goal is None:
+        return _ramped_command(sim_time, reentry_t, device), None, None
+
+    target_cmd, vals = goto.compute_goto_command(env, goal, device, prev_command=prev_goto_command)
+    if reentry_t is None:
+        return target_cmd, vals, target_cmd
+
+    # Same post-recovery caution the original fixed-demo-command ramp applies (see its own comment
+    # above): don't trust full forward speed immediately after a RECOVER->WALK handoff. Ramp the
+    # forward-speed component up using the already-validated initial-fraction/duration from the
+    # fixed-command case; leave the turn-rate command unramped (beyond goto.py's own slew limit,
+    # which still applies via prev_goto_command) since reorienting toward the goal right after a fall
+    # (which can leave the robot facing an arbitrary direction) matters more here than it did for the
+    # original straight-line demo.
+    frac = min(max((sim_time - reentry_t) / WALK_REENTRY_RAMP_S, 0.0), 1.0)
+    initial_frac = WALK_REENTRY_INITIAL_COMMAND[0] / WALK_DEMO_COMMAND[0]
+    v_frac = initial_frac + frac * (1.0 - initial_frac)
+    ramped = target_cmd.clone()
+    ramped[0, 0] = v_frac * target_cmd[0, 0]
+    return ramped, vals, ramped
+
+
 def _append_diag_record(path: str, record: dict) -> None:
     with open(path, "a") as f:
         f.write(json.dumps(record) + "\n")
@@ -209,6 +260,15 @@ def main():
 
     state = PhaseState()
     start_status_server(state, args_cli.status_port)
+    waypoint_visualizer = goto.make_waypoint_visualizer()
+
+    if args_cli.goto:
+        waypoints = []
+        for pair in args_cli.goto.split(";"):
+            x_str, y_str = pair.split(",")
+            waypoints.append((float(x_str), float(y_str)))
+        state.set_goals(waypoints)
+        print(f"[phase_stitch] go-to-point queue loaded: {waypoints}")
 
     if args_cli.joint_diag_log:
         joint_names = env.action_manager.get_term("joint_pos")._joint_names
@@ -227,6 +287,12 @@ def main():
     handoff_action = torch.zeros(1, 23, device=device)  # last SCALED action applied before a WALK handoff
     pending_diag = None  # {"t": handoff sim_time, "joint_pos": [...]} between a handoff and its outcome
     blend_tick = BLEND_TICKS  # >= BLEND_TICKS means "not currently blending"
+    goto_hold_ticks = 0  # consecutive ticks held inside goto.ARRIVAL_RADIUS_M -- see goto.ARRIVAL_HOLD_TICKS
+    last_goto_command = None  # threads goto.py's own slew-rate limiter across ticks (None = not navigating)
+
+    preloaded_goal = state.get_current_goal()
+    if preloaded_goal is not None:
+        print(f"[phase_stitch] t=0.0s GO_TO_START goal=({preloaded_goal[0]:.2f}, {preloaded_goal[1]:.2f})")
 
     print("[phase_stitch] ready, starting WALK phase.")
     try:
@@ -240,8 +306,13 @@ def main():
                     walk_reentry_t = sim_time
                     blend_tick = BLEND_TICKS  # fresh env.reset() needs no blend, already a clean pose
                     pending_diag = None  # a manual reset abandons any unresolved handoff -- neither outcome applies
+                    goto_hold_ticks = 0  # env.reset() repositions the robot -- any in-progress arrival hold is stale
+                    last_goto_command = None  # start the slew limiter fresh from a clean repositioned state
                 if do_push and phase == "WALK":
                     push.apply_push(env)
+
+                current_goal, queued_goals = state.get_queue_snapshot()
+                goto.update_waypoint_markers(waypoint_visualizer, current_goal, queued_goals, device)
 
                 if phase == "WALK":
                     if args_cli.auto_push_interval_s > 0:
@@ -250,7 +321,27 @@ def main():
                             push.apply_push(env)
                             time_since_push = 0.0
 
-                    command_buf = _ramped_command(sim_time, walk_reentry_t, device)
+                    command_buf, goto_vals, last_goto_command = _resolve_walk_command(
+                        env, sim_time, walk_reentry_t, state, device, last_goto_command
+                    )
+                    if goto_vals is not None:
+                        state.update_goto(goto_vals)
+                        if goto_vals["arrived"]:
+                            goto_hold_ticks += 1
+                            if goto_hold_ticks >= goto.ARRIVAL_HOLD_TICKS:
+                                print(
+                                    f"[phase_stitch] t={sim_time:.1f}s GO_TO_ARRIVE "
+                                    f"goal=({goto_vals['goal_x']:.2f}, {goto_vals['goal_y']:.2f})"
+                                )
+                                next_goal = state.advance_goal()
+                                goto_hold_ticks = 0
+                                if next_goal is not None:
+                                    print(
+                                        f"[phase_stitch] t={sim_time:.1f}s GO_TO_START "
+                                        f"goal=({next_goal[0]:.2f}, {next_goal[1]:.2f})"
+                                    )
+                        else:
+                            goto_hold_ticks = 0
                     obs = observations.build_walk_obs(env, command_buf, last_action_walk)
                     raw_action = walk_policy.act(obs)
                     last_action_walk = raw_action
@@ -314,6 +405,7 @@ def main():
                             asset.write_joint_velocity_to_sim_index(velocity=torch.zeros_like(asset.data.joint_vel.torch))
                         phase = "WALK"
                         last_action_walk = torch.zeros(1, 23, device=device)
+                        last_goto_command = None  # fresh slew-limiter start, same reasoning as last_action_walk
                         time_since_push = 0.0
                         walk_reentry_t = sim_time
                         handoff_action = scaled_action

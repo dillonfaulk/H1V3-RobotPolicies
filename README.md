@@ -73,6 +73,7 @@ isaaclab/                    # mirrors Isaac Lab's own directory structure exact
     play_asimov1_phase_stitch.py         # live walk->fall->recover->walk phase-machine demo, see below
     asimov1_phase_stitch/                # phase-machine package: gates, obs assembly, policy loading,
                                           # push testing, status/control HTTP server (used by the above)
+                                          # goto.py: v0 go-to-point waypoint FSM, see below
   source/isaaclab_assets/isaaclab_assets/robots/
     asimov1.py                # ASIMOV1_CFG articulation config (actuator gains, joint limits, etc.)
     v1x1.py                   # V1X1_CFG articulation config
@@ -209,6 +210,26 @@ The training-time gravity-lift assist mechanism (environment-level, not part of 
 **Known open items**: the knee-bend value at the exact handoff instant (see the fall-recovery section above) remains unresolved - a zero-retraining experiment raising the phase-machine's own `STAND_HOLD_TICKS` (from a 3-tick debounce to 20, to let the robot settle longer before handing off) made things WORSE, not better - the robot got stuck in RECOVER for 100+ seconds, because its residual angular velocity at the terminal pose is bursty/intermittent rather than a smooth settle, so requiring many consecutive low-velocity ticks just waits for an increasingly unlikely streak. Reverted back to 3. The remaining ~10% of handoffs that still fail show no single shared cause in the diagnostic data collected so far.
 
 **Known open items**: the 2 remaining failures in the latest measurement were both quick re-falls (0.2-0.6s) with no shared cause found yet. A per-joint diagnostic (log the full 23-joint position vector at every handoff, success vs fail) is the natural next step if closing that last gap becomes a priority.
+
+## asimov-1: go-to-point navigation (v0 FSM)
+
+<p align="center">
+  <img src="images/asimov1_goto_waypoints_demo.gif" alt="asimov-1 go-to-point waypoint navigation demo" width="70%" />
+</p>
+
+A supervisor FSM (`asimov1_phase_stitch/goto.py`) that steers the walking policy's own velocity-command interface toward a queue of world-frame `(x, y)` waypoints, arriving within `ARRIVAL_RADIUS_M` before advancing to the next. This is a deliberate **v0**: an orient-then-move proportional pursuit controller (architecture "(a)" from arXiv:2508.14098, "No More Marching"), not a trained end-to-end goal policy - every command it emits traces to two numbers (distance, heading error) and this one file, so its failure mode is bounded by its own clamps (worst case: a slow robot that stops) rather than a new checkpoint's unexplored edge cases. A trained goal-conditioned policy (v1) is meant to run *inside* this same supervisor later, not replace it.
+
+Heading error drives a continuous forward-speed taper plus an explicit slew-rate limit on the command itself (not a hard orient/move threshold switch) - an early version's hard cutoff caused whipsaw turn-command reversals and spin-type falls near the threshold. The current goal (and any queued ones) render live in the Kit viewport via `isaaclab.markers.VisualizationMarkers`, and the same status/control HTTP server used by the phase machine gets a `POST /control/goto {"waypoints": [[x,y], ...]}` route for setting/replacing the queue live.
+
+Run it live with a waypoint queue:
+```bash
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play_asimov1_phase_stitch.py \
+    --walk_checkpoint /path/to/asimov1_omni_robustness_validated/actor.safetensors \
+    --recovery_checkpoint /path/to/asimov1_fallrecovery_stable_validated/actor.safetensors \
+    --goto "1.5,0.0;1.5,1.5;0.0,1.5;0.0,0.0" --viz kit
+```
+
+**A real training bug was found and fixed along the way.** Live testing against the v0 FSM surfaced a turning-quality ceiling no amount of FSM-side tuning could close (wide-radius overshoot on sharp turns), which pointed back at the underlying walking policy's own turning behavior. Investigating that turned up `InsufficientProgressTermination` silently working against turning since the term was first added: it measured a 2-second window's displacement against a commanded direction computed from the robot's *current* (window-close) heading instead of its *window-start* heading - for sustained turning this created a systematic mismatch that scored good turns as "insufficient progress." Fixed by snapshotting heading alongside position at each window's start; `insufficient_progress`'s rate dropped from ~65-68% to near 0% immediately. A smaller residual version of the same bug class (a proportionally-scaled-but-still-nonzero progress bar that a legitimate near-zero-command pivot turn could still fail) was fixed with a true dead-zone (`min_command_speed`). Also added a `TurnBiasedVelocityCommand` custom command term (75% of sampled episodes are turn-focused) and raised `track_ang_vel_z`'s reward weight (2.0 -> 6.0) to match the raw achieved-reward parity `track_lin_vel_xy` already had. Across several retraining chunks after these fixes: Mean reward 51 -> 132, `error_vel_yaw` 0.69 -> ~0.29 rad, zero falls, with the turning-reward/linear-reward ratio steadily closing. The GIF above is the direct payoff: a 4-waypoint square loop completed in ~40s with clean, tight turns and no circling/overshoot, where the pre-fix policy would swing wide past each corner.
 
 ## v1x1: training status
 

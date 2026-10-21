@@ -25,6 +25,10 @@ class PhaseState:
         self.fall_count = 0
         self.push_requested = False
         self.reset_requested = False
+        self.goal_queue: list[tuple[float, float]] = []
+        self.current_goal: tuple[float, float] | None = None
+        self.goto_arrivals = 0
+        self._goto_last_vals: dict = {}
 
     def update(self, phase: str, gate_values: dict, sim_time: float = None) -> None:
         with self._lock:
@@ -45,6 +49,12 @@ class PhaseState:
                 "last_transition": self.last_transition,
                 "walk_success_count": self.walk_success_count,
                 "fall_count": self.fall_count,
+                "goto": {
+                    "current_goal": self.current_goal,
+                    "queue_remaining": len(self.goal_queue),
+                    "arrivals": self.goto_arrivals,
+                    **self._goto_last_vals,
+                },
             }
 
     def request_push(self) -> None:
@@ -62,6 +72,37 @@ class PhaseState:
             self.push_requested = False
             self.reset_requested = False
             return push, reset
+
+    def set_goals(self, waypoints: list[tuple[float, float]]) -> None:
+        """Replaces the waypoint queue and makes the first one current immediately. An empty list
+        clears navigation entirely, falling the executor back to its original fixed-command demo
+        behavior -- this is the v0 go-to-point queue (goto.py), a persistent state field (not a
+        one-shot request like push/reset above), since the main loop needs to read it every tick."""
+        with self._lock:
+            self.goal_queue = list(waypoints)
+            self.current_goal = self.goal_queue.pop(0) if self.goal_queue else None
+
+    def get_current_goal(self) -> tuple[float, float] | None:
+        with self._lock:
+            return self.current_goal
+
+    def get_queue_snapshot(self) -> tuple[tuple[float, float] | None, list[tuple[float, float]]]:
+        """For the waypoint visualizer -- the current goal plus the still-queued ones (not consumed)."""
+        with self._lock:
+            return self.current_goal, list(self.goal_queue)
+
+    def advance_goal(self) -> tuple[float, float] | None:
+        """Called by the main loop once an arrival has been held for goto.ARRIVAL_HOLD_TICKS --
+        pops the next queued waypoint, or clears current_goal (back to the default demo command) if
+        the queue is empty."""
+        with self._lock:
+            self.goto_arrivals += 1
+            self.current_goal = self.goal_queue.pop(0) if self.goal_queue else None
+            return self.current_goal
+
+    def update_goto(self, vals: dict) -> None:
+        with self._lock:
+            self._goto_last_vals = vals
 
 
 def _make_handler(state: PhaseState):
@@ -87,6 +128,29 @@ def _make_handler(state: PhaseState):
             elif self.path == "/control/reset":
                 state.request_reset()
                 self._send_json({"ok": True, "queued": "reset"})
+            elif self.path == "/control/goto":
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length) if length else b"{}"
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    self._send_json({"error": "invalid JSON body"}, 400)
+                    return
+                waypoints = payload.get("waypoints")
+                if waypoints is None and "x" in payload and "y" in payload:
+                    waypoints = [[payload["x"], payload["y"]]]
+                if waypoints is None:
+                    self._send_json(
+                        {"error": "body must be {'x':.., 'y':..} or {'waypoints': [[x,y], ...]}"}, 400
+                    )
+                    return
+                try:
+                    parsed = [(float(p[0]), float(p[1])) for p in waypoints]
+                except (TypeError, ValueError, IndexError):
+                    self._send_json({"error": "waypoints must be a list of [x, y] pairs"}, 400)
+                    return
+                state.set_goals(parsed)
+                self._send_json({"ok": True, "queued_waypoints": len(parsed)})
             else:
                 self._send_json({"error": "not found"}, 404)
 

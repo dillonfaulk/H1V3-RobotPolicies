@@ -21,7 +21,10 @@ import torch
 from typing import TYPE_CHECKING, Sequence
 
 from isaaclab.assets import Articulation, RigidObject
+from isaaclab.envs.mdp.commands.commands_cfg import UniformVelocityCommandCfg
+from isaaclab.envs.mdp.commands.velocity_command import UniformVelocityCommand
 from isaaclab.managers import CurriculumTermCfg, ManagerTermBase, RewardTermCfg, SceneEntityCfg, TerminationTermCfg
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.math import euler_xyz_from_quat, quat_apply, quat_apply_inverse, wrap_to_pi, yaw_quat
 
 if TYPE_CHECKING:
@@ -489,6 +492,23 @@ class InsufficientProgressTermination(ManagerTermBase):
     what PERFECT command-tracking would have produced (scaled by the ACTUAL commanded speed at window-close
     time) -- so a near-zero command (e.g. the rel_standing_envs fraction) naturally requires near-zero
     displacement, never falsely triggering on legitimate standing.
+
+    FIXED a second time, live mid-session (2026-10-20): the "commanded direction" used for the projection
+    was computed from the robot's CURRENT heading (at window-CLOSE time), not a heading anchored to when
+    the window started. For a straight-walking command this is a non-issue (heading barely changes over
+    one window), but for any sustained ang_vel_z command -- exactly the behavior the turning-focused reward
+    change this same session was trying to train -- the robot's heading (and so "forward") rotates
+    throughout the window. The displacement vector traces a curved/arced path, while the projection
+    direction only reflects the FINAL heading, creating a real mismatch that grows with how much the robot
+    actually turned -- i.e. this measured "genuine committed turning" as *worse* progress than it really
+    was, specifically. Confirmed empirically, not just by this math: after raising track_ang_vel_z's reward
+    weight (which correctly got the policy attempting real turns for the first time), this termination's
+    own logged rate climbed from ~0% to ~65-68% of episodes within a few hundred iterations in two separate
+    runs -- i.e. the moment the policy started doing the thing we wanted, this bug started killing those
+    episodes before it could get credit for it. Fixed by snapshotting the heading (`_ref_quat`) at the same
+    instant as the position snapshot (`_ref_pos`), and projecting against THAT heading instead of the
+    current one -- removes the shifting-reference-frame artifact while leaving the termination's actual
+    purpose (catching genuine stalling/wiggling) untouched.
     """
 
     def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRLEnv):
@@ -497,6 +517,7 @@ class InsufficientProgressTermination(ManagerTermBase):
         window_time = cfg.params["window_time"]
         self.window_steps = max(1, round(window_time / env.step_dt))
         self._ref_pos = torch.zeros(self.num_envs, 2, device=self.device)
+        self._ref_quat = torch.zeros(self.num_envs, 4, device=self.device)
         self._steps_since_ref = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self._initialized = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
@@ -513,40 +534,52 @@ class InsufficientProgressTermination(ManagerTermBase):
         command_name: str,
         window_time: float,
         min_speed_fraction: float = 0.3,
+        min_command_speed: float = 0.15,
     ) -> torch.Tensor:
         current_pos = self.asset.data.root_pos_w.torch[:, :2]
+        current_quat = self.asset.data.root_quat_w.torch
 
         need_init = ~self._initialized
         if torch.any(need_init):
             self._ref_pos[need_init] = current_pos[need_init]
+            self._ref_quat[need_init] = current_quat[need_init]
             self._steps_since_ref[need_init] = 0
             self._initialized[need_init] = True
 
         self._steps_since_ref += 1
         window_closed = self._steps_since_ref >= self.window_steps
 
-        # FIXED live mid-session -- the original version measured displacement MAGNITUDE only
-        # (torch.norm), direction-agnostic, so drifting backward at full speed when commanded FORWARD
-        # satisfied this termination exactly as well as actually moving forward. Confirmed directly from
-        # the user's own live observation ("even when commanded forward they tend to drift back") --
-        # this termination had ZERO ability to catch that, since "moved a lot" was all it ever checked,
-        # never "moved the right way." Now projects the displacement onto the COMMANDED direction (rotated
-        # from the command's own yaw-aligned frame into world frame via the robot's current yaw, since
-        # root_pos_w is a world-frame position) and requires that SIGNED projection to clear the threshold
-        # -- moving backward when told to go forward now gives a NEGATIVE projection, correctly failing.
+        # Projects displacement onto the COMMANDED direction (rotated from the command's own yaw-aligned
+        # frame into world frame via the heading ANCHORED at window-start, self._ref_quat -- not the
+        # robot's current heading, see the class docstring's second FIXED paragraph above) and requires
+        # that SIGNED projection to clear the threshold -- moving backward when told to go forward still
+        # gives a negative projection (that part of the original direction-aware fix is unchanged).
         displacement_vec = current_pos - self._ref_pos
         command = env.command_manager.get_command(command_name)
         command_xy_yaw_frame = command[:, :2]
         command_speed = torch.norm(command_xy_yaw_frame, dim=1)
         command_xyz_yaw_frame = torch.cat([command_xy_yaw_frame, torch.zeros_like(command_speed).unsqueeze(-1)], dim=-1)
-        command_xyz_world = quat_apply(yaw_quat(self.asset.data.root_quat_w.torch), command_xyz_yaw_frame)
+        command_xyz_world = quat_apply(yaw_quat(self._ref_quat), command_xyz_yaw_frame)
         command_dir_world = command_xyz_world[:, :2] / (command_speed.unsqueeze(-1) + 1e-6)
         projected_displacement = torch.sum(displacement_vec * command_dir_world, dim=1)
         min_displacement = command_speed * window_time * min_speed_fraction
-        insufficient = window_closed & (projected_displacement < min_displacement)
+        # min_command_speed is a true DEAD-ZONE, not just the proportional min_displacement scaling above --
+        # added live mid-session (2026-10-20) as a residual fix once the heading-snapshot bug (see docstring)
+        # was already fixed but insufficient_progress stayed high (~72.6%) under TurnBiasedVelocityCommand's
+        # TURN-mode episodes, whose lin_vel band is narrowed to (-0.1,0.1) but NOT pinned to exactly 0.0 (a
+        # deliberate choice, for sampling diversity -- see TurnBiasedVelocityCommandCfg's own docstring).
+        # Even a small nonzero commanded speed sets a small-but-real min_displacement bar that a genuinely
+        # correct, nearly-stationary pivot turn can still fail to clear (real CoM sway/stepping noise during
+        # an in-place turn easily dips below a few cm of net projected progress). Below min_command_speed,
+        # skip the check entirely rather than just scaling it down -- a true "near-zero command needs truly
+        # no progress requirement," not merely a small one. 0.15 m/s sits just above TURN mode's worst-case
+        # band magnitude (sqrt(0.1^2+0.1^2)=0.141), so legitimate turn-focused episodes are fully exempt,
+        # while LINEAR-mode episodes (full lin_vel range) almost always exceed it and stay fully checked.
+        insufficient = window_closed & (projected_displacement < min_displacement) & (command_speed >= min_command_speed)
 
         if torch.any(window_closed):
             self._ref_pos[window_closed] = current_pos[window_closed]
+            self._ref_quat[window_closed] = current_quat[window_closed]
             self._steps_since_ref[window_closed] = 0
 
         return insufficient
@@ -1428,3 +1461,62 @@ class AssistCurriculum(ManagerTermBase):
                 self._window_start = env.common_step_counter
 
         return {"scale": float(getattr(env, ASSIST_SCALE_ATTR)), "success_rate": self._last_rate}
+
+
+class TurnBiasedVelocityCommand(UniformVelocityCommand):
+    """Same uniform SE(2) velocity command as the stock `UniformVelocityCommand`, except each resample
+    is drawn from one of two episode "modes" instead of sampling all three axes independently every
+    time: TURN mode (probability `cfg.turn_episode_prob`) samples ang_vel_z from its full configured
+    range while narrowing lin_vel_x/lin_vel_y to a small near-zero band; LINEAR mode (the remaining
+    probability) does the reverse -- full lin_vel_x/y range, narrow ang_vel_z.
+
+    Added 2026-10-20 directly off live evidence from the asimov1 go-to-point v0 executor
+    (asimov1_phase_stitch/goto.py): "near-zero forward speed, high turn rate, sustained for several
+    seconds" is a real, under-trained corner of this policy's command space. Under the stock command's
+    independent-per-axis uniform sampling, that specific combination only ever occurs by chance (all 3
+    axes landing in a narrow joint region simultaneously) and never for long, since every resample
+    redraws all three axes fresh. This class oversamples exactly that combination (and its mirror,
+    committed straight walking) instead of relying on chance to cover it -- a direct curriculum
+    response to a diagnosed gap, not a guess.
+    """
+
+    cfg: TurnBiasedVelocityCommandCfg
+
+    def _resample_command(self, env_ids):
+        n = len(env_ids)
+        is_turn_episode = torch.empty(n, device=self.device).uniform_(0.0, 1.0) <= self.cfg.turn_episode_prob
+
+        lin_x_full = torch.empty(n, device=self.device).uniform_(*self.cfg.ranges.lin_vel_x)
+        lin_y_full = torch.empty(n, device=self.device).uniform_(*self.cfg.ranges.lin_vel_y)
+        ang_z_full = torch.empty(n, device=self.device).uniform_(*self.cfg.ranges.ang_vel_z)
+        lin_x_narrow = torch.empty(n, device=self.device).uniform_(*self.cfg.turn_episode_lin_vel_range)
+        lin_y_narrow = torch.empty(n, device=self.device).uniform_(*self.cfg.turn_episode_lin_vel_range)
+        ang_z_narrow = torch.empty(n, device=self.device).uniform_(*self.cfg.linear_episode_ang_vel_range)
+
+        self.vel_command_b[env_ids, 0] = torch.where(is_turn_episode, lin_x_narrow, lin_x_full)
+        self.vel_command_b[env_ids, 1] = torch.where(is_turn_episode, lin_y_narrow, lin_y_full)
+        self.vel_command_b[env_ids, 2] = torch.where(is_turn_episode, ang_z_full, ang_z_narrow)
+
+        if self.cfg.heading_command:
+            r = torch.empty(n, device=self.device)
+            self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
+            self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
+        self.is_standing_env[env_ids] = (
+            torch.empty(n, device=self.device).uniform_(0.0, 1.0) <= self.cfg.rel_standing_envs
+        )
+        # NOTE: standing-env zeroing of BOTH axes still happens afterward, every step, in the base
+        # class's own _update_command -- unchanged and untouched here, so rel_standing_envs continues
+        # to mean exactly what it already does regardless of which mode an episode landed in.
+
+
+@configclass
+class TurnBiasedVelocityCommandCfg(UniformVelocityCommandCfg):
+    """Config for TurnBiasedVelocityCommand. `turn_episode_lin_vel_range`/`linear_episode_ang_vel_range`
+    default to a tight band around zero rather than exactly 0.0 -- a literal constant across an entire
+    resample window felt like an unnecessary extra restriction with no clear benefit; a small nonzero
+    band keeps some natural diversity within each mode without diluting the intended bias."""
+
+    class_type: type = TurnBiasedVelocityCommand
+    turn_episode_prob: float = 0.75
+    turn_episode_lin_vel_range: tuple[float, float] = (-0.1, 0.1)
+    linear_episode_ang_vel_range: tuple[float, float] = (-0.15, 0.15)

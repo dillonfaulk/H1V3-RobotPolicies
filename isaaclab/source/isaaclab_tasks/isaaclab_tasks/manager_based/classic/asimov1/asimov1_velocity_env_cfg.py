@@ -266,12 +266,23 @@ class CommandsCfg:
     # step 3 toward Menlo's full Β±0.8/Β±0.6 target. ang_vel_z left UNCHANGED at Β±0.8 (already wider than
     # Menlo's own Β±0.6 target, confirmed above -- no need to touch it). This step is close enough to the
     # final target that the NEXT widen after this one could plausibly go straight to the full Β±0.8/Β±0.6.
-    base_velocity = mdp.UniformVelocityCommandCfg(
+    # class_type SWITCHED from the stock mdp.UniformVelocityCommandCfg to asimov1_mdp's own
+    # TurnBiasedVelocityCommandCfg (2026-10-20), queued for the NEXT training run after the live
+    # weight-parity/6.0-vs-4.0 retrain currently in progress is evaluated -- not applied mid-run (a
+    # command-sampling change isn't something a checkpoint resume can absorb the way a reward-weight
+    # change can, since it changes what the policy is actually being asked to do each episode, not
+    # just how much a given outcome is worth). turn_episode_prob=0.75 biases 75% of episodes toward
+    # the exact under-trained corner diagnosed live tonight (near-zero forward speed, high turn rate,
+    # sustained) -- see TurnBiasedVelocityCommand's own docstring in mdp.py for the full reasoning.
+    # `ranges` below stays the full-envelope range used by BOTH episode modes' "full" axis -- unchanged
+    # from the widen-history above this comment, not touched by this switch.
+    base_velocity = asimov1_mdp.TurnBiasedVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         heading_command=False,
         debug_vis=True,
         rel_standing_envs=0.2,
+        turn_episode_prob=0.75,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-0.7, 0.8),
             lin_vel_y=(-0.55, 0.55),
@@ -388,9 +399,29 @@ class RewardsCfg:
         weight=4.0,
         params={"command_name": "base_velocity", "std": 0.25},
     )
+    # Weight raised 2.0 -> 4.0, resumed from asimov1_omni_robustness_validated (2026-10-20) -- restores
+    # parity with track_lin_vel_xy's own 4.0, matching Menlo's own published weights for this exact robot
+    # (see track_lin_vel_xy's comment above: "track_lin_vel=+2.0, track_ang_vel=+2.0", equal magnitude --
+    # our 4.0/2.0 split had drifted away from that parity during earlier tuning sessions for reasons
+    # unrelated to turning specifically). Triggered by direct live evidence from the asimov1 go-to-point
+    # v0 executor (asimov1_phase_stitch/goto.py): even a carefully slew-limited, capped turn-rate command
+    # (well inside this checkpoint's own trained ANG_VEL_Z_RANGE) repeatedly destabilized the gait during
+    # sustained reorients, while forward-tracking quality was solid -- a real asymmetry in how well the
+    # two command axes are actually tracked/held, not just a supervisor-side gain problem (ruled out by
+    # exhausting supervisor-side fixes first: smoothing, capping, slew-limiting all helped some corner
+    # cases but none eliminated the underlying spin-fall pattern on sharp turns).
+    #
+    # Raised again 4.0 -> 6.0, resumed from this same run's own model_29100.pt (iteration 29100, 619
+    # iterations into the parity run above), live mid-session: at parity, logged metrics showed
+    # track_ang_vel_z's weighted reward (~0.27-0.37) still only ~20-25% of track_lin_vel_xy's (~1.3-1.55),
+    # and error_vel_yaw (~0.82-1.02 rad) stayed far larger than error_vel_xy (~0.12-0.17) -- equal WEIGHT
+    # was not producing equal PULL, since the gap is in raw achieved tracking quality after 28k+ prior
+    # iterations under a 2.0/4.0 split, not just incentive scale. track_lin_vel_xy deliberately left at
+    # 4.0, not lowered -- no evidence forward-tracking needs less incentive, only that turning needs more;
+    # lowering the thing that's already working risks regressing it for no clear gain.
     track_ang_vel_z = RewTerm(
         func=loco_mdp.track_ang_vel_z_world_exp,
-        weight=2.0,
+        weight=6.0,
         params={"command_name": "base_velocity", "std": 0.25},
     )
     lin_vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
