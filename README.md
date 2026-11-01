@@ -44,6 +44,12 @@ Policies here come from **two different simulators**. They are not interchangeab
 | BDX-R | Velocity walking, flat (PPO) | `checkpoints/bdxr/bdxr_velocity_flat_validated.pt` | Isaac Lab | 39 obs / 10 actions | Validated (sim) |
 | Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_remap_model_6750.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 
+<p align="center">
+  <img src="images/microduck_velstand_drive.gif" alt="Microduck VelStand policy driven live by keyboard in the MuJoCo viewer" width="80%" />
+  <br>
+  <em>Microduck VelStand driven live by keyboard in the MuJoCo viewer (mjlab-trained, sim only).</em>
+</p>
+
 Earlier milestone checkpoints (the asimov-1 omni step3/step4/quality_run2 and the earlier fall-recovery runs) are also in `checkpoints/`; each one's training-status section below explains where it sits in the lineage.
 
 This repo does **not** contain the Isaac Lab framework itself - only the project-specific files (task definitions, reward/termination shaping, robot asset configs, converted USD models, training/play/teleop scripts, and a handful of validated checkpoints) needed to drop back into a fresh Isaac Lab checkout.
