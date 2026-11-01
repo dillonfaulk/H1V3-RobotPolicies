@@ -12,11 +12,39 @@
   <em>asimov-1 driven live via the ROS2 /cmd_vel teleop bridge in this repo - proof of concept.</em>
 </p>
 
-Reinforcement learning locomotion policies trained in [NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab), covering three robots:
+Reinforcement learning locomotion policies for four robots. Three were trained in [NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab), and one (Microduck) in [mjlab](https://github.com/mujocolab/mjlab) (MuJoCo Warp). See [Two training stacks](#two-training-stacks--read-this-first) before using any checkpoint.
 
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) - a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
 - **v1x1** - a custom quadruped. Trained with PPO for omnidirectional walking, also with a live ROS2 teleop bridge.
 - **BDX-R** ([BDX-R/BDX-R-IsaacLab](https://github.com/BDX-R/BDX-R-IsaacLab)) - an open-source Disney BDX-droid-inspired biped, hardware target under $3000. Trained with plain PPO for omnidirectional velocity-command walking on flat ground.
+- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling. Sim-validated only.
+
+## Two training stacks — read this first
+
+Policies here come from **two different simulators**. They are not interchangeable: the physics backends, export formats and observation-normalization handling all differ. Every policy in the index below is labeled with the stack it was trained in.
+
+**Isaac Lab (NVIDIA Isaac Sim / PhysX)** - asimov-1, v1x1, BDX-R
+- Pinned to Isaac Lab `v3.0.0-beta2.patch1`.
+- Checkpoints ship as `<name>.pt` plus a same-named folder with `actor.onnx`, `actor.safetensors`, `full.safetensors` and `metadata.json`. BDX-R currently ships the `.pt` only.
+- Observation normalization: check each checkpoint's `metadata.json`. The walking policies trained with normalization OFF. The asimov-1 fall-recovery policies trained with it ON, and their normalizer stats are in `actor.safetensors`. They are **not** baked into `actor.onnx`.
+
+**mjlab (MuJoCo Warp)** - Microduck
+- Trained with [pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl) (mjlab 1.3.0, PPO via RSL-RL). The full code, all training runs and the eval scripts are in [dillonfaulk/microduck_rl @ local/velstand-own-teachers](https://github.com/dillonfaulk/microduck_rl/tree/local/velstand-own-teachers).
+- Policies ship as ONNX exported with that repo's `scripts/export.py`, with the observation normalizer **baked into the ONNX**. Feed raw observations.
+- Each policy folder also carries a snapshot of its task config, distillation code and the RSL-RL PPO `agent.yaml` / `env.yaml` the run used.
+
+### Policy index
+
+| Robot | Policy | Checkpoint | Trained in | Contract | Status |
+|---|---|---|---|---|---|
+| asimov-1 | Omnidirectional walking (PPO+AMP) | `checkpoints/asimov1/asimov1_omni_robustness_validated` | Isaac Lab | 81 obs / 23 actions, 60 Hz | Validated (sim) |
+| asimov-1 | Fall recovery (walk→fall→recover→walk handoff 90.0%, 36/40) | `checkpoints/asimov1/asimov1_fallrecovery_stable_validated` | Isaac Lab | 76 obs / 23 actions, 60 Hz, normalizer in safetensors | Validated (sim) |
+| v1x1 | Omnidirectional walking (PPO) | `checkpoints/v1x1/v1x1_omni_final` | Isaac Lab | 60 obs / 16 actions | Validated (sim) |
+| v1x1 | SV walking (PPO) | `checkpoints/v1x1/v1x1_SVwalk_final` | Isaac Lab | 84 obs / 16 actions | Validated (sim) |
+| BDX-R | Velocity walking, flat (PPO) | `checkpoints/bdxr/bdxr_velocity_flat_validated.pt` | Isaac Lab | 39 obs / 10 actions | Validated (sim) |
+| Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_remap_model_6750.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
+
+Earlier milestone checkpoints (the asimov-1 omni step3/step4/quality_run2 and the earlier fall-recovery runs) are also in `checkpoints/`; each one's training-status section below explains where it sits in the lineage.
 
 This repo does **not** contain the Isaac Lab framework itself - only the project-specific files (task definitions, reward/termination shaping, robot asset configs, converted USD models, training/play/teleop scripts, and a handful of validated checkpoints) needed to drop back into a fresh Isaac Lab checkout.
 
@@ -102,6 +130,9 @@ checkpoints/
   asimov1/                     # validated milestone checkpoints, see below
   v1x1/
   bdxr/
+
+microduck/                     # mjlab-trained (NOT Isaac Lab), see the Microduck section below
+  velstand/                    # ONNX policies + metadata.json + config/ snapshot (task cfg, distill, PPO agent.yaml)
 
 tools/
   convert_checkpoint.py        # .pt -> safetensors + metadata.json converter, see below
@@ -295,6 +326,17 @@ inspection, not guessed):
    constructor unless `handle_deprecated_rsl_rl_cfg()` is called first, which neither script did by default.
    Patched both scripts to call it. **This would affect asimov-1/v1x1 too if either were retrained fresh
    against this same installed rsl-rl-lib version** - not just a BDX-R-specific issue.
+
+## Microduck: VelStand (mjlab)
+
+**Trained in mjlab (MuJoCo Warp), not Isaac Lab.** None of the Isaac Lab restore steps above apply. See [`microduck/velstand/README.md`](microduck/velstand/README.md) for the full card.
+
+- **Current policy:** `microduck/velstand/velstand_remap_model_6750.onnx`. Its predecessor, `velstand_model_3000.onnx`, is kept next to it for lineage.
+- **How it was trained:** our own velocity walk is the anchor and our own StandUp expert is the stand teacher. VelStand chunk 1 (4,000 iterations) produced model_3000. Round 2 (4,000 more iterations) fed the walk anchor a command lookup table that removed the speed dead zones, producing model_6750.
+- **Measured:** in the CPU sim, 46/48 fallen starts got up (left side 8/8) and there were no falls in any walking test. In the training sim, get-ups are 99% and forward speed tracking is nearly exact from 0.1 to 0.25 m/s.
+- **Known weakness, stated plainly:** get-ups are still violent, about 14 rad/s peak trunk spin. This policy is **sim only** and has never run on the physical robot. The get-ups must soften before it does.
+- **Drive it** with plain `scripts/infer_policy.py --new-cmd-obs` from microduck_rl and the all-collisions scene (`scene_allcollisions.xml`).
+- **License:** the policy files are CC-BY-NC-SA-4.0, my choice to match Pollen's terms for the Microduck 3D models. The config snapshots derive from Pollen's Apache-2.0 code and keep that license. Credit [Pollen Robotics](https://github.com/pollen-robotics/microduck_rl).
 
 ## A note on scope
 

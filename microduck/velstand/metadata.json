@@ -1,0 +1,56 @@
+{
+  "robot": "microduck",
+  "training_stack": "mjlab 1.3.0 (MuJoCo Warp), PPO via RSL-RL, trained with pollen-robotics/microduck_rl",
+  "task": "Mjlab-VelStand-Flat-MicroDuck",
+  "primary_policy": "velstand_remap_model_6750.onnx",
+  "policies": {
+    "velstand_remap_model_6750.onnx": {
+      "status": "current",
+      "training_run": "logs/rsl_rl/velstand/2026-10-31_14-09-51_remap",
+      "source_file": "model_6750.pt",
+      "source_sha256": "40953322c5a925be843718f691b9e317565cd88a3e727829b3b75df3150ba4c5",
+      "onnx_sha256": "6c33593168663e17195f3a9652e0269dd761f9cb267142a5ab753dddbd791f8b",
+      "iteration": 6750,
+      "max_abs_diff_vs_pytorch": 1.07e-06
+    },
+    "velstand_model_3000.onnx": {
+      "status": "predecessor",
+      "training_run": "logs/rsl_rl/velstand/2026-10-30_17-43-33_velstand",
+      "source_file": "model_3000.pt",
+      "source_sha256": "cc4b22ac46574f33f38ef10f8df369aa676e73abbfe56b6ee214cac6313f5b18",
+      "onnx_sha256": "94a206e4f9a4a958e9e91f2da136e87e6498e5f2bae811b76a347f5a52662735",
+      "iteration": 3000,
+      "max_abs_diff_vs_pytorch": 1.4e-06
+    }
+  },
+  "contract": {
+    "obs_shape": [1, 61],
+    "action_shape": [1, 14],
+    "obs_layout": "ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61 (twist 3 + head_pose 4 + body_pose 6)",
+    "control_hz": 50,
+    "physics_dt_s": 0.005,
+    "decimation": 4,
+    "obs_normalization": "empirical normalizer BAKED INTO the ONNX (exported with microduck_rl scripts/export.py) -- feed raw observations",
+    "gravity_input": "projected gravity (infer_policy.py CLI default), NOT the raw accelerometer"
+  },
+  "lineage": {
+    "walk_anchor": "own velocity walk, logs/rsl_rl/velocity/2026-10-26_16-43-15_velocity/model_4750.pt",
+    "stand_teacher": "own StandUp expert with support-contact gate, logs/rsl_rl/microduck_stand/2026-10-29_20-14-19_supportgate/model_3500.pt",
+    "chunk_1": "4,000 iterations warm-started from the walk (MICRODUCK_WARM_START=1), 2,048 envs -> model_3000",
+    "round_2": "4,000 iterations, plain resume from model_3000 (3000 -> 6999), 2,048 envs, walk anchor fed an x/y/yaw command lookup table (LOCAL_ANCHOR_TWIST_REMAP, distill.remap_anchor_twist) -> model_6750 chosen",
+    "code": "github.com/dillonfaulk/microduck_rl, branch local/velstand-own-teachers (commits 6bc72eba code, f19c6ae8 runs/scripts), based on pollen-robotics/microduck_rl b02fdea"
+  },
+  "drive": "cd microduck_rl && uv run python scripts/infer_policy.py --new-cmd-obs --scene src/mjlab_microduck/robot/microduck/scene_allcollisions.xml --walking <onnx>. Do NOT use logs/drive_remap.py with model_6750 (it was calibrated for model_3000 and overshoots now).",
+  "measured_results_model_6750": {
+    "cpu_sim": "fixed harness (BAM actuator, 1-step delay, training solver, allcollisions scene): get-ups 46/48 fallen starts (face-down 8/8, face-up 8/8, left side 8/8, right side 8/8, sitting 6/8); no falls in any walking test; fwd 0.15 -> 0.15 m/s, fwd 0.30 -> 0.26, back 0.20 -> 0.12, turn +-1.0 -> 1.09 / -1.08 rad/s, turn left 0.5 -> 0.57",
+    "training_sim": "get-ups 99.0% / 99.5% (prone, 1024 envs, 20 s); knocked over while walking -> back up 95.3%; forward tracking near-exact 0.1-0.25 m/s"
+  },
+  "known_weaknesses": [
+    "SIM ONLY -- never run on the physical robot",
+    "get-ups are violent: ~14 rad/s peak trunk angular velocity (inherited from the stand teacher); must soften before hardware",
+    "0.1 m/s forward/backward from standstill does nothing (CPU sim)",
+    "slow right turn in place (0.5 rad/s) does nothing; left works",
+    "backing up curves (~0.2 rad/s at 0.2 m/s back)",
+    "strafe capped ~0.08 m/s by the walk teacher"
+  ]
+}
