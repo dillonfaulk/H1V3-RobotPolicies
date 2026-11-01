@@ -29,6 +29,12 @@ uv run python scripts/infer_policy.py --new-cmd-obs \
   --walking /path/to/velstand_remap_model_6750.onnx
 ```
 
+<p align="center">
+  <img src="../../images/microduck_velstand_drive.gif" alt="Microduck VelStand policy driven live by keyboard in the MuJoCo viewer" width="80%" />
+  <br>
+  <em>Microduck VelStand driven live by keyboard in the MuJoCo viewer (mjlab-trained, sim only).</em>
+</p>
+
 The all-collisions scene is required: the policy trained with neck, head and upper-leg collisions. Don't use `logs/drive_remap.py` with model_6750. That wrapper was calibrated for model_3000 and now overshoots.
 
 ## How it was trained
