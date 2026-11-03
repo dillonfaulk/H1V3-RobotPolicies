@@ -8,16 +8,17 @@ Microduck is Pollen Robotics' ~800 g open-source biped. VelStand is a single pol
 
 | File | What it is |
 |---|---|
-| `velstand_remap_model_6750.onnx` | **Current policy** (round 2, iteration 6750) |
-| `velstand_model_3000.onnx` | Predecessor (chunk 1, iteration 3000), kept for lineage |
+| `velstand_round3_model_3999.onnx` | **Current policy** (round 3, iteration 3999) |
+| `velstand_remap_model_6750.onnx` | Round 2 (iteration 6750), kept for lineage |
+| `velstand_model_3000.onnx` | Round 1 (iteration 3000), kept for lineage |
 | `metadata.json` | Contract, lineage, checksums, measured results, known weaknesses |
-| `config/microduck_velstand_env_cfg.py`, `config/distill.py`, `config/microduck_standup_env_cfg.py` | Task config, teacher/distillation code and stand-teacher config, from commit `6bc72eba` |
-| `config/round2_remap_run/`, `config/chunk1_run/` | `agent.yaml` (RSL-RL PPO config) and `env.yaml`, exactly as each run saved them |
+| `config/microduck_velstand_env_cfg.py`, `config/distill.py`, `config/microduck_standup_env_cfg.py`, `config/microduck_velocity_env_cfg.py` | Task configs (VelStand, stand teacher, walk teacher) and the distillation code, from commit `25b011ef` (round 3). Earlier rounds' versions are in the git history. |
+| `config/round3_run/`, `config/round2_remap_run/`, `config/chunk1_run/` | `agent.yaml` (RSL-RL PPO config) and `env.yaml`, exactly as each run saved them |
 
 ## Contract
 
 - Observation `[1, 61]` → action `[1, 14]`, 50 Hz (physics 5 ms × decimation 4).
-- The observation normalizer is **baked into the ONNX** (exported with microduck_rl's `scripts/export.py`). Feed raw observations. Each ONNX was checked against its PyTorch checkpoint (max difference about 1e-6).
+- The observation normalizer is **baked into the ONNX** (exported with microduck_rl's `scripts/export.py`). Feed raw observations. Each ONNX was checked against its PyTorch checkpoint (max difference about 1e-6 to 6e-6).
 - The gravity input is **projected gravity**, not the raw accelerometer.
 
 ## Drive it (CPU MuJoCo viewer)
@@ -26,36 +27,45 @@ Microduck is Pollen Robotics' ~800 g open-source biped. VelStand is a single pol
 cd microduck_rl
 uv run python scripts/infer_policy.py --new-cmd-obs \
   --scene src/mjlab_microduck/robot/microduck/scene_allcollisions.xml \
-  --walking /path/to/velstand_remap_model_6750.onnx
+  --walking /path/to/velstand_round3_model_3999.onnx
 ```
 
 <p align="center">
   <img src="../../images/microduck_velstand_drive.gif" alt="Microduck VelStand policy driven live by keyboard in the MuJoCo viewer" width="80%" />
   <br>
-  <em>Microduck VelStand driven live by keyboard in the MuJoCo viewer (mjlab-trained, sim only).</em>
+  <em>Microduck VelStand driven live by keyboard in the MuJoCo viewer (mjlab-trained, sim only; recorded with the round 2 policy).</em>
 </p>
 
-The all-collisions scene is required: the policy trained with neck, head and upper-leg collisions. Don't use `logs/drive_remap.py` with model_6750. That wrapper was calibrated for model_3000 and now overshoots.
+The all-collisions scene is required: the policy trained with neck, head and upper-leg collisions. Don't use `logs/drive_remap.py`; that wrapper was calibrated for model_3000.
 
 ## How it was trained
 
-1. **Walk anchor:** our own velocity walk (`model_4750`).
-2. **Stand teacher:** our own StandUp expert (`supportgate/model_3500`). A support-contact gate pays the standing rewards only when nothing but the feet touches the floor, which closed a "head tripod" reward exploit.
-3. **VelStand chunk 1:** 4,000 iterations at 2,048 envs, warm-started from the walk. Behavior cloning from the stand teacher on fallen frames and the walk anchor on upright frames → `model_3000`.
-4. **Round 2:** 4,000 more iterations from `model_3000` → `model_6750`. The walk anchor had speed dead zones, and the student copied them. So during training the anchor was fed the forward, sideways and turn command that makes it reach the asked speed, from a lookup table calibrated on the anchor itself.
+1. **Rounds 1–2 → `model_6750`.** VelStand warm-started from our first velocity walk (`model_4750`), cloned our StandUp expert (`supportgate/model_3500`) on fallen frames and the walk on upright frames. The walk had speed dead zones, so round 2 fed it a command lookup table during training.
+2. **Walk v2 (new walk teacher).** The first walk ignored slow commands because its speed reward was too forgiving at Microduck speeds: standing still at 0.1 m/s still earned 90% of it. Walk v2 was retrained from scratch with sharper speed and turn rewards added next to the stock ones (ramped in after the gait forms) and in-place turn commands down to 0.1 rad/s. 8,000 iterations → `model_7998`.
+3. **Gentle stand teacher.** The StandUp expert was resumed with a penalty on trunk spin above 6 rad/s, introduced only after the get-up skill already existed. Face-up rises went from 13.7 to 9.7 rad/s peak with get-ups still 100% → `model_11000`.
+4. **Round 3 → `model_3999`.** 4,000 iterations of VelStand on both new teachers, with a new lookup table measured on walk v2.
 
-## Measured (model_6750)
+## Measured (round 3, model_3999)
 
-- **CPU sim:** 46/48 fallen starts got up (left side 8/8). No falls in any walking test. Forward 0.15 → 0.15 m/s, 0.30 → 0.26; turn ±1.0 → 1.09 / −1.08 rad/s.
-- **Training sim:** 99% prone get-ups. Forward speed tracking is nearly exact from 0.1 to 0.25 m/s.
+| | Round 2 (`6750`) | **Round 3 (`3999`)** |
+|---|---|---|
+| CPU sim get-ups (48 fallen starts) | 46/48 | **48/48** |
+| Training sim prone get-ups | 99.0 / 99.5% | **99.3 / 100%** |
+| Face-up rise, peak trunk spin (median) | 13.6 rad/s | **9.4 rad/s** |
+| Back 0.20 m/s (CPU / training sim) | 0.12 / 0.13 | **0.23 / 0.23** |
+| Strafe (CPU 0.15 / training sim 0.10) | 0.08 / 0.03 | **0.13 / 0.11** |
+| Turn right 0.5 rad/s (CPU) | 0 | **0.48** |
+| Forward 0.30 m/s (CPU) | 0.26 | **0.31** |
+| Turn ±1.0 rad/s (CPU) | 1.09 / −1.08 | 1.03 / −1.19 |
+
+No falls in any walking test in either sim.
 
 ## Known weaknesses
 
-- **Violent get-ups**, about 14 rad/s peak trunk spin. They must soften before the real robot.
-- 0.1 m/s forward or backward from standstill does nothing.
-- A slow right turn (0.5 rad/s) does nothing; left works.
-- Backing up curves slightly.
-- Strafe tops out around 0.08 m/s, a limit of the walk teacher.
+- 0.10 m/s forward or backward does nothing. In the CPU sim, 0.15 m/s forward from a standstill also does nothing (it works in the training sim).
+- Turns in place at 0.4 rad/s or slower do nothing; a left turn at 0.5 rad/s reaches only 0.29 in the CPU sim.
+- Backing up still curves slightly in the CPU sim.
+- Rising from a sitting start still peaks around 13 rad/s.
 
 ## License and attribution
 

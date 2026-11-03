@@ -302,8 +302,11 @@ RECOVERY_ECON_KICKIN_ITER = 600 if WARM_START else 1200
 # distill the deployed stand expert into the fallen frames (see distill.py).
 # The expert recovers 100% face-down/up and 95% side on this model in ~1 s.
 ENABLE_EXPERT_BC = True
-LOCAL_STAND_EXPERT_CKPT = "/home/n3z/microduck_rl/logs/rsl_rl/microduck_stand/2026-10-29_20-14-19_supportgate/model_3500.pt"
-LOCAL_WALK_ANCHOR_CKPT = "/home/n3z/microduck_rl/logs/rsl_rl/velocity/2026-10-26_16-43-15_velocity/model_4750.pt"
+# Round 3 (2026-11-03): spin-capped stand expert (face-up peak |ω| 13.7 → 9.7 rad/s, 100 %
+# get-ups) and walk v2 (fine tracking; 1:1 from 0.15 m/s). Rounds 1-2 used
+# supportgate/model_3500 and velocity/2026-10-26_16-43-15_velocity/model_4750.
+LOCAL_STAND_EXPERT_CKPT = "/home/n3z/microduck_rl/logs/rsl_rl/microduck_stand/2026-11-01_17-21-18_spincap_chunk2/model_11000.pt"
+LOCAL_WALK_ANCHOR_CKPT = "/home/n3z/microduck_rl/logs/rsl_rl/velocity/2026-11-01_17-21-17_walkv2_chunk2/model_7998.pt"
 EXPERT_BC_COEF = 1.0
 EXPERT_BC_GATE_TILT_DEG = 35.0
 
@@ -361,6 +364,7 @@ BODY_POSE_STD = {
 # v7 (j4i6yoq2@1250) track 0.5-1.0 rad/s in sim (see docs/velstand_policy.md). Kept OFF
 # so this file reproduces the published v7 recipe (commit 53fb7d1).
 ENABLE_YAW_FIX = False
+INHERIT_WALK_FINE_TRACKING = True  # round 3: anchor/warm start is walk v2 (rounds 1-2: False)
 TRACK_YAW_FINE_STD = 0.35
 TRACK_YAW_FINE_WEIGHT = 2.0
 TURN_IN_PLACE_FRACTION_VELSTAND = 0.2    # velocity recipe: 0.15
@@ -424,7 +428,29 @@ LOCAL_ANCHOR_TWIST_REMAP = {
             (0.136, 0.273, 0.362, 0.44, 0.53, 0.664, 0.778, 0.886, 0.982, 1.077),
             (0.15, 0.3, 0.38, 0.461, 0.552, 0.653, 0.796, 0.942, 1.041, 1.13)),
 }
-ANCHOR_YAW_REMAP = LOCAL_ANCHOR_TWIST_REMAP
+# Round 3: walk v2 (velocity walkv2_chunk2/model_7998) measured the same way
+# (logs/walkv2_7998_response.txt, `build_anchor_remap.py --wide`): ~identity from 0.15 m/s /
+# 0.2 rad/s walking, so only the slow end moves (x ≤ 0.1 and in-place |wz| < 0.4 dead). Knots
+# reach x 0.4 / y 0.15 because targets past the last knot get the last fed value.
+WALKV2_ANCHOR_TWIST_REMAP = {
+    "x": {"targets": (0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.3, 0.35, 0.4),
+          "pos": (0.1, 0.112, 0.123, 0.134, 0.145, 0.164, 0.188, 0.21, 0.231, 0.252, 0.299, 0.383, 0.45),
+          "neg": (0.105, 0.123, 0.142, 0.156, 0.166, 0.176, 0.186, 0.196, 0.219, 0.252, 0.298, 0.4, 0.4)},
+    "y": {"targets": (0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.115, 0.13, 0.15),
+          "pos": (0.067, 0.105, 0.114, 0.123, 0.132, 0.142, 0.152, 0.171, 0.19, 0.223, 0.287, 0.4, 0.4),
+          "neg": (0.112, 0.123, 0.135, 0.147, 0.16, 0.174, 0.187, 0.202, 0.225, 0.248, 0.4, 0.4, 0.4)},
+    "lin": (0.0, 0.204, 0.286, 0.357),
+    "targets": (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+    "pos": ((0.345, 0.399, 0.471, 0.535, 0.594, 0.699, 0.794, 0.858, 0.927, 1.014),
+            (0.098, 0.197, 0.295, 0.392, 0.489, 0.583, 0.676, 0.76, 0.841, 0.928),
+            (0.1, 0.201, 0.301, 0.41, 0.516, 0.607, 0.698, 0.795, 0.892, 1.001),
+            (0.098, 0.196, 0.294, 0.429, 0.551, 0.657, 0.756, 0.851, 0.953, 1.062)),
+    "neg": ((0.356, 0.429, 0.511, 0.585, 0.652, 0.72, 0.8, 0.904, 0.993, 1.055),
+            (0.103, 0.206, 0.308, 0.4, 0.493, 0.599, 0.707, 0.8, 0.893, 0.988),
+            (0.116, 0.233, 0.338, 0.43, 0.519, 0.6, 0.681, 0.781, 0.887, 1.009),
+            (0.103, 0.207, 0.312, 0.432, 0.548, 0.659, 0.767, 0.872, 0.964, 1.051)),
+}
+ANCHOR_YAW_REMAP = WALKV2_ANCHOR_TWIST_REMAP  # round 2: LOCAL_ANCHOR_TWIST_REMAP
 YAW_REMAP_TURN_IN_PLACE_FRACTION = 0.2   # velocity recipe: 0.15
 YAW_REMAP_TURN_IN_PLACE_MIN_FRAC = 0.2   # velocity recipe: 0.4 (in-place |wz| < 0.4 never trained)
 
@@ -625,6 +651,14 @@ def _add_body_control(cfg: ManagerBasedRlEnvCfg, play: bool) -> None:
 def make_microduck_velstand_env_cfg(play: bool = False, rough: bool = False) -> ManagerBasedRlEnvCfg:
     # Walk layer: the PROVEN velocity recipe, verbatim.
     cfg = make_microduck_velocity_env_cfg(play=play, rough=rough)
+
+    # Walk v2's fine tracking terms (velocity cfg ENABLE_FINE_TRACKING) stay out of
+    # VelStand until a round trains on the v2 walk — rounds 1-2 ran without them.
+    if not INHERIT_WALK_FINE_TRACKING:
+        for name in ("track_lin_vel_fine", "track_yaw_fine"):
+            cfg.rewards.pop(name, None)
+            cfg.curriculum.pop(f"{name}_weight", None)
+        cfg.commands["twist"].turn_in_place_min_frac = 0.4
 
     # In play mode the curriculum doesn't run, so the fall-termination disable
     # below never fires — just delete the termination outright.

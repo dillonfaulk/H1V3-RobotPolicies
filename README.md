@@ -42,12 +42,12 @@ Policies here come from **two different simulators**. They are not interchangeab
 | v1x1 | Omnidirectional walking (PPO) | `checkpoints/v1x1/v1x1_omni_final` | Isaac Lab | 60 obs / 16 actions | Validated (sim) |
 | v1x1 | SV walking (PPO) | `checkpoints/v1x1/v1x1_SVwalk_final` | Isaac Lab | 84 obs / 16 actions | Validated (sim) |
 | BDX-R | Velocity walking, flat (PPO) | `checkpoints/bdxr/bdxr_velocity_flat_validated.pt` | Isaac Lab | 39 obs / 10 actions | Validated (sim) |
-| Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_remap_model_6750.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
+| Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_round3_model_3999.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 
 <p align="center">
   <img src="images/microduck_velstand_drive.gif" alt="Microduck VelStand policy driven live by keyboard in the MuJoCo viewer" width="80%" />
   <br>
-  <em>Microduck VelStand driven live by keyboard in the MuJoCo viewer (mjlab-trained, sim only).</em>
+  <em>Microduck VelStand driven live by keyboard in the MuJoCo viewer (mjlab-trained, sim only; recorded with the round 2 policy).</em>
 </p>
 
 Earlier milestone checkpoints (the asimov-1 omni step3/step4/quality_run2 and the earlier fall-recovery runs) are also in `checkpoints/`; each one's training-status section below explains where it sits in the lineage.
@@ -337,10 +337,10 @@ inspection, not guessed):
 
 **Trained in mjlab (MuJoCo Warp), not Isaac Lab.** None of the Isaac Lab restore steps above apply. See [`microduck/velstand/README.md`](microduck/velstand/README.md) for the full card.
 
-- **Current policy:** `microduck/velstand/velstand_remap_model_6750.onnx`. Its predecessor, `velstand_model_3000.onnx`, is kept next to it for lineage.
-- **How it was trained:** our own velocity walk is the anchor and our own StandUp expert is the stand teacher. VelStand chunk 1 (4,000 iterations) produced model_3000. Round 2 (4,000 more iterations) fed the walk anchor a command lookup table that removed the speed dead zones, producing model_6750.
-- **Measured:** in the CPU sim, 46/48 fallen starts got up (left side 8/8) and there were no falls in any walking test. In the training sim, get-ups are 99% and forward speed tracking is nearly exact from 0.1 to 0.25 m/s.
-- **Known weakness, stated plainly:** get-ups are still violent, about 14 rad/s peak trunk spin. This policy is **sim only** and has never run on the physical robot. The get-ups must soften before it does.
+- **Current policy:** `microduck/velstand/velstand_round3_model_3999.onnx` (round 3). The round 2 (`velstand_remap_model_6750.onnx`) and round 1 (`velstand_model_3000.onnx`) policies are kept next to it for lineage.
+- **How it was trained:** round 3 retrained both teachers. Walk v2 adds sharper speed and turn rewards so slow commands are no longer ignored; the stand teacher gained a penalty on trunk spin above 6 rad/s. VelStand then trained 4,000 iterations on both.
+- **Measured:** in the CPU sim, 48/48 fallen starts got up and there were no falls in any walking test. The face-up rise peaks at 9.4 rad/s trunk spin (round 2: 13.6). Backing up (0.23 m/s at 0.20 asked), strafing (0.13 at 0.15) and slow right turns now work.
+- **Known weaknesses, stated plainly:** 0.1 m/s commands and in-place turns of 0.4 rad/s or slower still do nothing. This policy is **sim only** and has never run on the physical robot.
 - **Drive it** with plain `scripts/infer_policy.py --new-cmd-obs` from microduck_rl and the all-collisions scene (`scene_allcollisions.xml`).
 - **License:** the policy files are CC-BY-NC-SA-4.0, my choice to match Pollen's terms for the Microduck 3D models. The config snapshots derive from Pollen's Apache-2.0 code and keep that license. Credit [Pollen Robotics](https://github.com/pollen-robotics/microduck_rl).
 

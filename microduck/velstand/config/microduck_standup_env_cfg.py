@@ -30,6 +30,23 @@ ENABLE_SYMMETRY = False
 ENABLE_SUPPORT_CONTACT_GATE = True
 NONFOOT_BODIES_PATTERN = r"^(trunk_base|hip_l|leg|hip_l_2|leg_2|jaw_soft)$"
 
+# Gentle rise (2026-11-01): supportgate model_3500 gets up 100 % but face-up rises peak
+# at ~14 rad/s trunk |ω| (median). Spin cap = ReLU(|ω| - 6)², weight 0 until iter 4000,
+# so it only lands on a RESUMED run whose rise skill already exists (timing lesson in
+# the smoothness-polish notes below). At -0.05 a 14 rad/s frame costs 3.2, 10 rad/s 0.8.
+ENABLE_SPIN_CAP = True
+SPIN_CAP_THRESH = 6.0
+SPIN_CAP_WEIGHT_STAGES = [
+    {"step": 0,          "weight": 0.0},
+    {"step": 4000 * 24,  "weight": -0.01},
+    {"step": 4500 * 24,  "weight": -0.025},
+    {"step": 5000 * 24,  "weight": -0.05},
+    # spincap chunk 1 (→ 7998): face-up peak 13.7 → 12.0 by 6000 then flat, get-ups
+    # still 100 % everywhere → chunk 2 raises it 4×.
+    {"step": 8000 * 24,  "weight": -0.1},
+    {"step": 8500 * 24,  "weight": -0.2},
+]
+
 # ── Domain randomisation (matched to the velocity env for sim2real parity) ────
 ENABLE_COM_RANDOMIZATION             = True
 ENABLE_HEAD_COM_RANDOMIZATION        = True   # match velocity: randomize head-assembly CoM
@@ -1033,6 +1050,19 @@ def make_microduck_standup_env_cfg(
             ],
         },
     )
+    if ENABLE_SPIN_CAP:
+        cfg.rewards["spin_cap"] = RewardTermCfg(
+            func=microduck_mdp.trunk_ang_vel_excess,
+            weight=0.0,
+            params={
+                "w_thresh":  SPIN_CAP_THRESH,
+                "asset_cfg": SceneEntityCfg("robot", body_names=("trunk_base",)),
+            },
+        )
+        cfg.curriculum["spin_cap_weight"] = CurriculumTermCfg(
+            func=microduck_mdp.reward_weight,
+            params={"reward_name": "spin_cap", "weight_stages": deepcopy(SPIN_CAP_WEIGHT_STAGES)},
+        )
 
     # ── Body-control curricula ────────────────────────────────────────────────
     # Everything below is body-control only — NOTE the early return; add any
