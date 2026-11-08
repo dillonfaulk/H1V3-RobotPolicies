@@ -17,7 +17,7 @@ Reinforcement learning locomotion policies for four robots. Three were trained i
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) - a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
 - **v1x1** - a custom quadruped. Trained with PPO for omnidirectional walking, also with a live ROS2 teleop bridge.
 - **BDX-R** ([BDX-R/BDX-R-IsaacLab](https://github.com/BDX-R/BDX-R-IsaacLab)) - an open-source Disney BDX-droid-inspired biped, hardware target under $3000. Trained with plain PPO for omnidirectional velocity-command walking on flat ground.
-- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling. Sim-validated only.
+- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it. Sim-validated only.
 
 ## Two training stacks — read this first
 
@@ -139,6 +139,7 @@ checkpoints/
 
 microduck/                     # mjlab-trained (NOT Isaac Lab), see the Microduck section below
   velstand/                    # ONNX policies + metadata.json + config/ snapshot (task cfg, distill, PPO agent.yaml)
+  goto_point/                  # v0 go-to-point waypoint supervisor (no training) + acceptance results
 
 tools/
   convert_checkpoint.py        # .pt -> safetensors + metadata.json converter, see below
@@ -343,6 +344,21 @@ inspection, not guessed):
 - **Known weaknesses, stated plainly:** 0.1 m/s commands and in-place turns of 0.4 rad/s or slower still do nothing. This policy is **sim only** and has never run on the physical robot.
 - **Drive it** with plain `scripts/infer_policy.py --new-cmd-obs` from microduck_rl and the all-collisions scene (`scene_allcollisions.xml`).
 - **License:** the policy files are CC-BY-NC-SA-4.0, my choice to match Pollen's terms for the Microduck 3D models. The config snapshots derive from Pollen's Apache-2.0 code and keep that license. Credit [Pollen Robotics](https://github.com/pollen-robotics/microduck_rl).
+
+## Microduck: go-to-point navigation (v0 supervisor)
+
+<p align="center">
+  <img src="images/microduck_goto_point_demo.gif" alt="Microduck walking a four-waypoint route in the MuJoCo viewer" width="70%" />
+  <br>
+  <em>Four-waypoint route, MuJoCo CPU viewer, 2x speed (30 s real time). Green = current goal, orange = queued, red = geofence.</em>
+</p>
+
+The asimov-1 go-to-point v0 pattern ported to the duck, with **no training**: a supervisor in [`microduck/goto_point/`](microduck/goto_point/README.md) drives the unchanged VelStand round 3 policy to a queue of `(x, y)` waypoints by writing only its velocity command.
+
+- **Built around the duck's measured quirks.** It never commands a slow walk, because 0.10 m/s does nothing. It steers with forward arcs (turns track down to 0.1 rad/s while walking) and pivots in place only at 0.8 rad/s, since slower in-place turns are dead. It never strafes or backs up.
+- **No separate recovery policy.** VelStand walks and gets up in one checkpoint, so the supervisor's whole fall response is to send zero until the duck is up, then carry on. asimov-1 needed a recovery policy and a phase machine for this.
+- **Measured (headless CPU sim):** 10/10 single-point arrivals from random starts, a 4-waypoint chain in 30 s, a real mid-route fall followed by an unaided get-up and a completed route, and an out-of-arena waypoint rejected before motion.
+- **Sim only**, using ground-truth pose. Arrival precision is about the 0.15 m radius.
 
 ## A note on scope
 

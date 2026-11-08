@@ -1,0 +1,13 @@
+{"t": 0.0, "event": "GO_TO_START", "wp": 1, "goal": [-0.3469517326059111, 1.8790536752518088], "pose": [-0.38, -0.028, 2.447]}
+{"t": 0.0, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.196, -1.487], "heading_err_deg": -51.2, "dist": 1.908, "cmd": [0.2, 0.0, -1.0]}
+{"t": 1.0, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.727, -0.271], "heading_err_deg": -8.9, "dist": 1.749, "cmd": [0.2, 0.0, -0.234]}
+{"t": 2.0, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.538, -0.012], "heading_err_deg": -0.4, "dist": 1.538, "cmd": [0.2, 0.0, -0.012]}
+{"t": 3.0, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.323, 0.034], "heading_err_deg": 1.5, "dist": 1.323, "cmd": [0.2, 0.0, 0.039]}
+{"t": 4.0, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.109, 0.036], "heading_err_deg": 1.9, "dist": 1.11, "cmd": [0.2, 0.0, 0.049]}
+{"t": 5.02, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.891, 0.019], "heading_err_deg": 1.2, "dist": 0.891, "cmd": [0.2, 0.0, 0.033]}
+{"t": 6.04, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.674, 0.003], "heading_err_deg": 0.3, "dist": 0.674, "cmd": [0.2, 0.0, 0.007]}
+{"t": 7.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.454, 0.008], "heading_err_deg": 1.0, "dist": 0.454, "cmd": [0.2, 0.0, 0.027]}
+{"t": 8.08, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.237, 0.005], "heading_err_deg": 1.1, "dist": 0.237, "cmd": [0.2, 0.0, 0.029]}
+{"t": 8.5, "event": "GO_TO_ARRIVE", "wp": 1, "dist": 0.147, "pose": [-0.357, 1.732, 1.508]}
+{"t": 8.5, "event": "GO_TO_DONE", "arrived": [1], "rejected": [], "falls": 0}
+{"t": 9.1, "event": "GO_TO_TRACE", "wp": null, "state": "DONE", "reason": "done", "goal_local": null, "heading_err_deg": null, "dist": null, "cmd": [0.0, 0.0, 0.0]}
