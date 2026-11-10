@@ -17,7 +17,7 @@ Reinforcement learning locomotion policies for four robots. Three were trained i
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) - a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
 - **v1x1** - a custom quadruped. Trained with PPO for omnidirectional walking, also with a live ROS2 teleop bridge.
 - **BDX-R** ([BDX-R/BDX-R-IsaacLab](https://github.com/BDX-R/BDX-R-IsaacLab)) - an open-source Disney BDX-droid-inspired biped, hardware target under $3000. Trained with plain PPO for omnidirectional velocity-command walking on flat ground.
-- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it. Sim-validated only.
+- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it and a right-foot ball-kick policy with a go-kick-recover mission. Sim-validated only.
 
 ## Two training stacks — read this first
 
@@ -43,6 +43,7 @@ Policies here come from **two different simulators**. They are not interchangeab
 | v1x1 | SV walking (PPO) | `checkpoints/v1x1/v1x1_SVwalk_final` | Isaac Lab | 84 obs / 16 actions | Validated (sim) |
 | BDX-R | Velocity walking, flat (PPO) | `checkpoints/bdxr/bdxr_velocity_flat_validated.pt` | Isaac Lab | 39 obs / 10 actions | Validated (sim) |
 | Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_round3_model_3999.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
+| Microduck | BallKick v1: right-foot kick (ball-blind, swapped in by a mission script) | `microduck/ballkick/ballkick_right_ts0p25_model_1000.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 
 <p align="center">
   <img src="images/microduck_velstand_drive.gif" alt="Microduck VelStand policy driven live by keyboard in the MuJoCo viewer" width="80%" />
@@ -140,6 +141,7 @@ checkpoints/
 microduck/                     # mjlab-trained (NOT Isaac Lab), see the Microduck section below
   velstand/                    # ONNX policies + metadata.json + config/ snapshot (task cfg, distill, PPO agent.yaml)
   goto_point/                  # v0 go-to-point waypoint supervisor (no training) + acceptance results
+  ballkick/                    # BallKick v1 right-foot ONNX + kick mission (navigate, align, kick, recover) + evals
 
 tools/
   convert_checkpoint.py        # .pt -> safetensors + metadata.json converter, see below
@@ -359,6 +361,22 @@ The asimov-1 go-to-point v0 pattern ported to the duck, with **no training**: a 
 - **No separate recovery policy.** VelStand walks and gets up in one checkpoint, so the supervisor's whole fall response is to send zero until the duck is up, then carry on. asimov-1 needed a recovery policy and a phase machine for this.
 - **Measured (headless CPU sim):** 10/10 single-point arrivals from random starts, a 4-waypoint chain in 30 s, a real mid-route fall followed by an unaided get-up and a completed route, and an out-of-arena waypoint rejected before motion.
 - **Sim only**, using ground-truth pose. Arrival precision is about the 0.15 m radius.
+
+## Microduck: BallKick v1 (right foot)
+
+<p align="center">
+  <img src="images/microduck_ballkick_demo.gif" alt="Microduck walking to a ball, lining up and kicking it along a yellow arrow in the MuJoCo viewer" width="70%" />
+  <br>
+  <em>One kick mission, MuJoCo CPU viewer, 1.5x speed. Green = stance spot, yellow = intended kick direction.</em>
+</p>
+
+A right-foot kick policy trained on Pollen's `Mjlab-BallKick-Flat-MicroDuck` task, plus a mission script in [`microduck/ballkick/`](microduck/ballkick/README.md). The mission walks to the ball with VelStand, lines the right foot up to ±12 mm, hard-swaps the kick policy in for 2 s, then swaps VelStand back.
+
+- **The policy can't see the ball.** It kicks from one trained stance, so all the placement work is in the mission's aligner.
+- **Measured (headless CPU sim, iteration 1000):** 50/50 kicks with the duck still standing, 50/50 through the VelStand → kick → VelStand handoff, 57/60 full missions, and 28/30 in a live 30-mission viewer run. No falls in any mission. Every failure was a ball bumped while lining up.
+- **Known weaknesses:** kicks land about 15° left of the aim line and about 1.6x harder than the 0.25 m/s target. It's right foot only. Later checkpoints overfit the start stance, so iteration 1000 ships and a wider-stance retrain is next.
+- **Upstream note:** the task's target speed and reward weights disagree upstream. This run trained at 0.25 m/s through a fork-local env var; details are in the card.
+- **Sim only.**
 
 ## A note on scope
 

@@ -1,0 +1,3 @@
+Dillon's viewer run, 2026-11-09 17:09: VelStand round 3 model_3999 + BallKick ts0.25 model_1000, --viewer --auto 30
+30 missions: 28 kicked, 0 missed, 2 aborted (ball_lost: duck bumped the ball while aligning, missions 27-28), 0 falls
+kicked: ball speed median 0.46 m/s (0.28-0.59), rolled median 1.26 m (0.84-1.55), off the arrow median +15 deg (+4..+20, always to the left), align pulses median 1 (max 18)

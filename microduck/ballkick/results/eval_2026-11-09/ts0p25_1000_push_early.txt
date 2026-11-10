@@ -1,0 +1,27 @@
+BAM m6 actuators on 14 joints: kt=0.3660 R=2.8114 vin=7.40V kp_fw=200 vin_drop_gain=0.1 vin_min=6.0 max_current=None forcerange=+/-0.963Nm armature=1.81e-03
+Loading walking policy from: logs/rsl_rl/ball_kick_right/2026-11-09_13-08-22_ts0p25_chunk1/2026-11-09_13-08-22_ts0p25_chunk1_model_1000.onnx
+Walking policy input: obs, shape: [1, 61]
+Walking policy output: actions, shape: [1, 14]
+Sensors found:
+  imu_ang_vel: id=2
+Body IDs:
+  trunk_base: id=1
+Number of actuators: 14
+Default pose: [ 0.     -0.0873 -0.4579 -0.0049  0.453   0.3491  0.3491  0.      0.
+  0.      0.0873  0.4579  0.0049 -0.453 ]
+Action scale: 1.0
+
+Actuator delay enabled:
+  Min lag: 1 timesteps
+  Max lag: 1 timesteps
+  Sampled lag: 1 timesteps
+  Buffer size: 2
+== 2026-11-09_13-08-22_ts0p25_chunk1_model_1000.onnx on ball, kick policy for the full 5 s, push 0.3 m/s at 1.0s: 50 episodes, target 0.25 m/s
+  kicked (ball moved forward): 50/50
+  peak ball speed: median 0.40 m/s (p10 0.30, p90 0.47) = 1.6x target
+  ball travel (forward, 5 s): median 1.39 m (p10 1.10, p90 1.53)
+  direction error |deg|: median 8.2 (p90 16.7, max 23.8)
+  contact time: median 0.18 s after the swap-in
+  duck at end: standing 50/50, not upright (never fell, held a lean) 0, fell-recovered 0, fell 0
+  GOOD KICKS (kicked AND standing at the end, never fell): 50/50
+  (7 s wall)

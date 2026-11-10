@@ -1,0 +1,56 @@
+{
+  "robot": "microduck",
+  "training_stack": "mjlab 1.3.0 (MuJoCo Warp), PPO via RSL-RL, trained with pollen-robotics/microduck_rl",
+  "task": "Mjlab-BallKick-Flat-MicroDuck",
+  "kick_foot": "right",
+  "primary_policy": "ballkick_right_ts0p25_model_1000.onnx",
+  "policies": {
+    "ballkick_right_ts0p25_model_1000.onnx": {
+      "status": "current (v1)",
+      "training_run": "logs/rsl_rl/ball_kick_right/2026-11-09_13-08-22_ts0p25_chunk1",
+      "source_file": "model_1000.pt",
+      "source_sha256": "18ffdc59395e923bbbde1d9d08e35e3a9e9f7cc165c120770196ef7c33c450c9",
+      "onnx_sha256": "49932c3e4071c1a19d38b5c7d9f643de9850383b0f6872ba667df50aaf4c2b71",
+      "iteration": 1000,
+      "max_abs_diff_vs_pytorch": 1.19e-06
+    }
+  },
+  "training": {
+    "num_envs": 4096,
+    "ball_target_speed_m_s": 0.25,
+    "ball_target_speed_note": "set with MICRODUCK_BALL_TARGET_SPEED=0.25 (fork-local env var). Upstream commit 2a0b1b08 restored BALL_TARGET_SPEED=1.0 but kept the 12 / -4 reward weights sized for 0.25 (a3fb8635). config/microduck_ball_kick_env_cfg.py defaults to 1.0; config/env.yaml records the 0.25 the run actually used.",
+    "robot_model": "groundcontact (as upstream); evaluated on the all-collisions robot",
+    "episode_s": 5,
+    "ball_offset_m": [0.09, -0.042],
+    "ball_offset_noise_m": 0.015,
+    "run_length": "stopped at iteration 3650 by a hardware crash; 1000 chosen on eval (later checkpoints lose alignment tolerance, see README)"
+  },
+  "contract": {
+    "obs_shape": [1, 61],
+    "action_shape": [1, 14],
+    "obs_layout": "same as VelStand: ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61 (all zero during the kick)",
+    "ball_in_obs": false,
+    "ball_note": "the actor is ball-blind: the duck must already stand with the ball at (0.09, -0.042) m in its yaw frame, within about +-15 mm. Only the critic saw the ball.",
+    "control_hz": 50,
+    "physics_dt_s": 0.005,
+    "decimation": 4,
+    "obs_normalization": "empirical normalizer BAKED INTO the ONNX (exported with microduck_rl scripts/export.py) -- feed raw observations",
+    "use": "hard swap from VelStand once aligned, run ~2 s, swap back to VelStand (code/kick_mission.py)"
+  },
+  "measured_results_model_1000": {
+    "kick_battery_50": "kicked 50/50, standing at end 50/50; peak ball speed median 0.375 m/s (1.5x the 0.25 target); travel median 1.28 m; |direction error| median 8.7 deg",
+    "handoff_50": "VelStand stand 1.5 s -> kick -> VelStand at 2.0 s: 50/50 kicked and standing; 0.39 m/s, 1.32 m, |dir err| median 13.9 deg",
+    "push_50": "0.3 m/s push at 1.0 s: 50/50; at 3.5 s: 48/50 (2 falls)",
+    "missions_headless": "kick_mission.py 2 x 30 random ball/heading (1.0-1.8 m away): 57/60 kicked, 0 falls (3 aborted: ball bumped while aligning)",
+    "missions_viewer": "Dillon's live viewer run, 30 missions: 28 kicked, 0 missed, 2 aborted (ball_lost), 0 falls; ball 0.46 m/s median, 1.26 m, +15 deg off the arrow median (always to the left)"
+  },
+  "known_weaknesses": [
+    "SIM ONLY -- never run on the physical robot",
+    "kicks land ~15 deg left of the intended line in missions, consistently",
+    "ball speed overshoots the 0.25 m/s target ~1.6x",
+    "ball-blind: needs the external aligner to place the duck within ~+-15 mm",
+    "later checkpoints overfit the start stance: mission success falls from 29/30 at 1000 to 4/30 at 3000",
+    "right foot only; no left-foot policy yet"
+  ],
+  "code": "github.com/dillonfaulk/microduck_rl, branch local/velstand-own-teachers, commits c1edc0e7 (code) + 0eb1a226 (runs/evals), based on pollen-robotics/microduck_rl"
+}
