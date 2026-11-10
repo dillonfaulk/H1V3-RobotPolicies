@@ -1,9 +1,10 @@
 # H1V3-RobotPolicies
 
 <p align="center">
-  <img src="images/asimov1.webp" alt="asimov-1 humanoid" width="30%" />
-  <img src="images/v1x1.png" alt="v1x1 quadruped" width="30%" />
-  <img src="images/bdxr.png" alt="BDX-R bipedal RL training" width="30%" />
+  <img src="images/asimov1.webp" alt="asimov-1 humanoid" width="23%" />
+  <img src="images/v1x1.png" alt="v1x1 quadruped" width="23%" />
+  <img src="images/bdxr.png" alt="BDX-R bipedal RL training" width="23%" />
+  <img src="images/microduck.jpg" alt="Microduck biped in the MuJoCo viewer, lined up behind an orange ball before a kick" width="23%" />
 </p>
 
 <p align="center">
