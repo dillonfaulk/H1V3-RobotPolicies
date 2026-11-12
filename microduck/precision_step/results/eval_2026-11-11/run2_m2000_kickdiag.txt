@@ -1,0 +1,3 @@
+  joint dev (deg) at arrival: [1, 0, 2, 2, -2, -9, -1, 3, -1, 3, 0, -3, -2, 3]
+  joint dev (deg) at arrival: [-1, 0, 3, 2, -4, -9, -2, 3, -2, 1, 0, -2, -2, 3]
+as-is             : kicked 19/16, right foot x vs HOME median -7.6 mm, max leg joint dev from HOME median 3.8 deg (max 5.2)

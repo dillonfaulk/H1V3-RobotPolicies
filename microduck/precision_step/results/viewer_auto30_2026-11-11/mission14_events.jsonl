@@ -1,0 +1,26 @@
+{"t": 0.0, "event": "MISSION_START", "ball": [-0.865, -0.586], "kick_heading_deg": -59.0, "stance": [-0.876, -0.488], "route": [[-1.082, -0.145], [-0.938, -0.385]]}
+{"t": 247.06, "event": "GO_TO_START", "wp": 1, "goal": [-1.0818527915150236, -0.14467675708609068], "pose": [0.722, 0.026, -0.976]}
+{"t": 247.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "pivot", "goal_local": [-0.869, -1.59], "heading_err_deg": -118.7, "dist": 1.812, "cmd": [0.0, 0.0, -0.8]}
+{"t": 248.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "pivot", "goal_local": [0.56, -1.735], "heading_err_deg": -72.1, "dist": 1.823, "cmd": [0.0, 0.0, -0.8]}
+{"t": 249.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.735, -0.612], "heading_err_deg": -19.4, "dist": 1.839, "cmd": [0.2, 0.0, -0.509]}
+{"t": 250.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.665, -0.035], "heading_err_deg": -1.2, "dist": 1.665, "cmd": [0.2, 0.0, -0.032]}
+{"t": 251.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.45, 0.029], "heading_err_deg": 1.2, "dist": 1.45, "cmd": [0.2, 0.0, 0.03]}
+{"t": 252.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.237, 0.028], "heading_err_deg": 1.3, "dist": 1.237, "cmd": [0.2, 0.0, 0.034]}
+{"t": 253.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [1.023, 0.047], "heading_err_deg": 2.6, "dist": 1.024, "cmd": [0.2, 0.0, 0.068]}
+{"t": 254.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.81, 0.015], "heading_err_deg": 1.1, "dist": 0.81, "cmd": [0.2, 0.0, 0.028]}
+{"t": 255.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.597, 0.01], "heading_err_deg": 0.9, "dist": 0.597, "cmd": [0.2, 0.0, 0.025]}
+{"t": 256.06, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.383, 0.012], "heading_err_deg": 1.8, "dist": 0.383, "cmd": [0.2, 0.0, 0.046]}
+{"t": 257.08, "event": "GO_TO_TRACE", "wp": 1, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.17, 0.009], "heading_err_deg": 3.0, "dist": 0.17, "cmd": [0.2, 0.0, 0.079]}
+{"t": 257.6, "event": "GO_TO_ARRIVE", "wp": 1, "dist": 0.059, "pose": [-1.024, -0.134, -3.025]}
+{"t": 257.62, "event": "GO_TO_START", "wp": 2, "goal": [-0.9376331588491835, -0.3846782103186288], "pose": [-1.028, -0.136, -3.021]}
+{"t": 258.1, "event": "GO_TO_TRACE", "wp": 2, "state": "NAVIGATE", "reason": "pivot", "goal_local": [0.015, 0.266], "heading_err_deg": 86.8, "dist": 0.266, "cmd": [0.0, 0.0, 0.8]}
+{"t": 259.12, "event": "GO_TO_TRACE", "wp": 2, "state": "NAVIGATE", "reason": "pivot", "goal_local": [0.196, 0.192], "heading_err_deg": 44.4, "dist": 0.274, "cmd": [0.0, 0.0, 0.8]}
+{"t": 260.14, "event": "GO_TO_TRACE", "wp": 2, "state": "NAVIGATE", "reason": "arc", "goal_local": [0.198, 0.043], "heading_err_deg": 12.3, "dist": 0.203, "cmd": [0.2, 0.0, 0.322]}
+{"t": 260.84, "event": "GO_TO_ARRIVE", "wp": 2, "dist": 0.059, "pose": [-0.98, -0.344, -0.944]}
+{"t": 260.84, "event": "GO_TO_DONE", "arrived": [1, 2], "rejected": [], "falls": 0}
+{"t": 261.26, "event": "PRECISE_START", "n": 1, "offset": [0.1591, -0.0068, -0.1104]}
+{"t": 262.9, "event": "PRECISE_ARRIVED", "after_s": 1.64}
+{"t": 262.9, "event": "KICK_SWAP_IN", "aligned": true, "pulses": 0, "mode": "precision", "err_mm": [14.0, -2.9], "err_heading_deg": -0.54}
+{"t": 263.1, "event": "KICK_FIRE", "after_swap_s": 0.2}
+{"t": 264.92, "event": "KICK_SWAP_OUT", "peak_ball_fwd": 0.425}
+{"t": 266.94, "event": "MISSION_DONE", "approach_mode": "precision", "foot_vs_home_mm": [-7.3, 1.9], "lfoot_vs_home_mm": [-5.5, 0.3], "trunk_speed_mm_s": 1.1, "tilt_deg": 2.9, "leg_dev_deg": 3.5, "align_ex_mm": 14.0, "align_ey_mm": -2.9, "align_eh_deg": -0.54, "pulses": 0, "aligned": true, "t_swap": 262.9, "kick_contact_t": 0.2, "peak_ball_fwd": 0.425, "ball_travel": 1.041, "kick_dir_err_deg": 14.7, "t_done": 266.94}

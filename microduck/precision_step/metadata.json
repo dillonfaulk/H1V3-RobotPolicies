@@ -1,0 +1,57 @@
+{
+  "robot": "microduck",
+  "training_stack": "mjlab 1.3.0 (MuJoCo Warp), PPO via RSL-RL, task code in dillonfaulk/microduck_rl (fork-local, not upstream)",
+  "task": "Mjlab-PrecisionStep-Flat-MicroDuck",
+  "primary_policy": "precision_step_model_3999.onnx",
+  "policies": {
+    "precision_step_model_3999.onnx": {
+      "status": "current (v1)",
+      "training_run": "logs/rsl_rl/precision_step/2026-11-11_16-15-45_chunk2_pose",
+      "source_file": "model_3999.pt",
+      "source_sha256": "f51aabc55b5b12665327488dd2063158f10c136c97971ebeaddf0bce32d3e0bd",
+      "onnx_sha256": "5f40410335c5a5a40f6abd17997532935c8e3b0ce134c35110a9cffbe11299f2",
+      "iteration": 3999,
+      "max_abs_diff_vs_pytorch": 8.34e-07
+    }
+  },
+  "training": {
+    "num_envs": 2048,
+    "num_envs_note": "4096 would need ~22 GB; 2048 peaked at 11.8 GB on a 16 GB card, 1.6 s/iteration",
+    "robot_model": "all-collisions (as VelStand and the mission), not BallKick's ground-contact model",
+    "episode_s": 6,
+    "targets": "per episode, start yaw frame: 65% radius 0-80 mm, 35% 80-250 mm; half the bearings in a +-45 deg forward cone, half all-around; heading +-15 deg; 10% exact zero (hold still)",
+    "ball": "70% of episodes: at the BallKick spot (0.09, -0.042) +-15 mm relative to the TARGET stance, unless it would overlap the start footprint; moving it > 1 cm terminates the episode (-20)",
+    "start": "standing, HOME joints +-0.08 rad, +-5 deg roll/pitch",
+    "lineage": "run 1 (chunk1, from scratch) stopped at 1253: model_1000 placed to 4.5 mm but arrived in a ~30-36 deg hip/knee crouch and the kick never fired (0/60 missions). Run 2 (chunk2_pose) = plain resume from run 1 model_1250 with arrival-posture terms (legs at HOME within 30 mm of the target) -> 3999."
+  },
+  "contract": {
+    "obs_shape": [1, 61],
+    "action_shape": [1, 14],
+    "obs_layout": "same as VelStand: ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61",
+    "command": "slots 48:51 = REMAINING offset to the target pose in the trunk's current yaw frame [dx m (forward), dy m (left), dyaw rad]; recomputed every tick; slots 51:61 (head/body) = 0. Trained range |(dx,dy)| <= 0.25 m, |dyaw| <= 15 deg.",
+    "command_note": "VelStand reads slots 48:51 as a velocity; this policy reads them as an offset. The supervisor picks the ONNX, so it fills the slots to match.",
+    "ball_in_obs": false,
+    "control_hz": 50,
+    "physics_dt_s": 0.005,
+    "decimation": 4,
+    "obs_normalization": "empirical normalizer BAKED INTO the ONNX (exported with microduck_rl scripts/export.py) -- feed raw observations",
+    "use": "hard swap from VelStand inside ~0.25 m of the target pose; swap out (to the kick) once within 12 mm / 3 deg and still for 0.5 s"
+  },
+  "measured_results_model_3999": {
+    "placement_battery_velstand_start_50": "kick-ready 50/50; position error median 4.8 mm (worst 9.4); heading 0.46 deg; worst leg joint vs HOME median 3.0 deg (worst 4.4); ball struck 0/46; falls 0",
+    "placement_battery_training_start_50": "kick-ready 49/50; 4.7 mm (worst 7.9); ball struck 1/40; falls 1",
+    "push_0.3_m_s_at_1s_50": "kick-ready 49/50; 4.0 mm (worst 6.8); ball struck 1/46; falls 0",
+    "with_ball_vs_ball_free": "kick-ready 130/132 with a ball, 18/18 ball-free (all three batteries)",
+    "missions_headless_2x30": "60/60 kicked, approach_mode precision in 60/60 (0 pulse fallbacks), 0 bumped balls, 0 falls, median ~17-19 s per mission (pulse aligner baseline: 57/60, 3 bumps, ~25 s)",
+    "missions_viewer_30": "Dillon's live viewer run: 30/30 kicked, all precision, 0 pulses, 0 falls (run twice, deterministic, identical)",
+    "kick_ready_definition": "within 12 mm and 3 deg of the target, front-back foot stagger < 10 mm, still for the last 0.5 s, every leg joint within 0.10 rad of HOME, ball not moved, no fall"
+  },
+  "known_weaknesses": [
+    "SIM ONLY -- never run on the physical robot",
+    "feet end ~10 mm behind HOME relative to the trunk, so the ball sits ~+10 mm far of the kick spot from the right foot; every mission still kicked, but the ball rolls ~1.0 m vs 1.26 m with the pulse aligner",
+    "the kick still lands ~15 deg left of the aim line (a BallKick v1 property, not this policy's)",
+    "ground-truth pose and ball position in sim; no odometry or vision yet",
+    "the mission pivots with VelStand first when the heading is > 8 deg off (the step policy trained on +-15 deg)"
+  ],
+  "code": "github.com/dillonfaulk/microduck_rl, branch local/velstand-own-teachers, commits a74d061d (code) + 16534d57 (runs/evals)"
+}

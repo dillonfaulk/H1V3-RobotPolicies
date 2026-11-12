@@ -1,0 +1,12 @@
+== 2026-11-11_15-43-54_chunk1_model_1000.onnx, training-like start: 50 episodes (40 with a ball)
+  KICK-READY (<= 12 mm, 3 deg, stagger < 10 mm, still, no strike, no fall): 48/50
+  final position error: median 4.5 mm, p90 7.7, worst 9.9
+  final heading error: median 0.45 deg, p90 1.26, worst 1.72
+  front-back foot stagger: median 2.5 mm, p90 6.7, worst 11.2; < 10 mm in 48/49
+  still at the end: 49/49
+  ball struck: 1/40 ball episodes
+  falls: 1/50
+    hold (0)           4 eps: kick-ready 4, median err 2.5 mm, struck 0, falls 0
+    near (<80 mm)     31 eps: kick-ready 30, median err 4.5 mm, struck 0, falls 0
+    far (80-250 mm)   15 eps: kick-ready 14, median err 5.2 mm, struck 1, falls 1
+  (7 s wall)

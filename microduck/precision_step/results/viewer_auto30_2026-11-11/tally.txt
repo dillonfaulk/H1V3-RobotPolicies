@@ -1,0 +1,4 @@
+Dillon's viewer run, 2026-11-11: VelStand round 3 model_3999 + BallKick ts0.25 model_1000 + PrecisionStep chunk2_pose model_3999 (--precision), --viewer --auto 30
+30 missions: 30 kicked, 0 missed, 0 aborted, 0 falls; approach mode [step] (precision policy) in all 30, 0 pulses, 0 pulse-aligner fallbacks
+kicked: ball 0.38-0.44 m/s, rolled 0.84-1.17 m, +12..+20 deg off the arrow (kick policy's left bias); aligned (foot-relative) +0..+14 mm along, -4..+1 mm across
+(17-35-37 and 17-51-37 are the same deterministic seed-0 run; the second was recorded: ~/Videos/duck_precision_kick_175304.mp4)

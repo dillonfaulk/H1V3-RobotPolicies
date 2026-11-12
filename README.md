@@ -18,7 +18,7 @@ Reinforcement learning locomotion policies for four robots. Three were trained i
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) - a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
 - **v1x1** - a custom quadruped. Trained with PPO for omnidirectional walking, also with a live ROS2 teleop bridge.
 - **BDX-R** ([BDX-R/BDX-R-IsaacLab](https://github.com/BDX-R/BDX-R-IsaacLab)) - an open-source Disney BDX-droid-inspired biped, hardware target under $3000. Trained with plain PPO for omnidirectional velocity-command walking on flat ground.
-- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it and a right-foot ball-kick policy with a go-kick-recover mission. Sim-validated only.
+- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it a right-foot ball-kick policy with a go-kick-recover mission, and a precision-step policy that places the duck to within ~5 mm for the kick. Sim-validated only.
 
 ## Two training stacks — read this first
 
@@ -45,6 +45,7 @@ Policies here come from **two different simulators**. They are not interchangeab
 | BDX-R | Velocity walking, flat (PPO) | `checkpoints/bdxr/bdxr_velocity_flat_validated.pt` | Isaac Lab | 39 obs / 10 actions | Validated (sim) |
 | Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_round3_model_3999.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 | Microduck | BallKick v1: right-foot kick (ball-blind, swapped in by a mission script) | `microduck/ballkick/ballkick_right_ts0p25_model_1000.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
+| Microduck | PrecisionStep v1: final-approach step-to-pose (twist slots = remaining target offset) | `microduck/precision_step/precision_step_model_3999.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 
 <p align="center">
   <img src="images/microduck_velstand_drive.gif" alt="Microduck VelStand policy driven live by keyboard in the MuJoCo viewer" width="80%" />
@@ -143,6 +144,7 @@ microduck/                     # mjlab-trained (NOT Isaac Lab), see the Microduc
   velstand/                    # ONNX policies + metadata.json + config/ snapshot (task cfg, distill, PPO agent.yaml)
   goto_point/                  # v0 go-to-point waypoint supervisor (no training) + acceptance results
   ballkick/                    # BallKick v1 right-foot ONNX + kick mission (navigate, align, kick, recover) + evals
+  precision_step/              # PrecisionStep v1 final-approach ONNX + battery + mission --precision mode + evals
 
 tools/
   convert_checkpoint.py        # .pt -> safetensors + metadata.json converter, see below
@@ -378,6 +380,23 @@ A right-foot kick policy trained on Pollen's `Mjlab-BallKick-Flat-MicroDuck` tas
 - **Known weaknesses:** kicks land about 15° left of the aim line and about 1.6x harder than the 0.25 m/s target. It's right foot only. Later checkpoints overfit the start stance, so iteration 1000 ships and a wider-stance retrain is next.
 - **Upstream note:** the task's target speed and reward weights disagree upstream. This run trained at 0.25 m/s through a fork-local env var; details are in the card.
 - **Sim only.**
+- **Superseded approach:** the PrecisionStep policy below now does the final approach (60/60 missions); the pulse aligner described here stays as its fallback.
+
+## Microduck: PrecisionStep v1 (final approach)
+
+<p align="center">
+  <img src="images/microduck_precision_step_demo.gif" alt="Microduck stepping precisely onto a stance spot next to a ball and kicking it, twice, in the MuJoCo viewer" width="70%" />
+  <br>
+  <em>Two missions, MuJoCo CPU viewer, real speed. VelStand walks in, PrecisionStep steps onto the green disk and stops, BallKick kicks.</em>
+</p>
+
+A third policy in the same hot-swap family, in [`microduck/precision_step/`](microduck/precision_step/README.md). It owns the last 25 cm before a kick: it steps onto the exact stance next to the ball and stops dead, feet level and legs back at the kick's start posture. The three twist slots carry the remaining offset to the target pose instead of a velocity.
+
+- **Missions:** 60/60 headless and 30/30 in Dillon's live viewer run, with 0 bumped balls and 0 falls, against the pulse aligner's 57/60. Missions also got faster, about 18 s instead of 25 s.
+- **Placement:** 50/50 kick-ready from a VelStand start (median 4.8 mm, 0.46°, legs within 3° of HOME), 49/50 with a 0.3 m/s push.
+- **Trained** in a new fork-local task (`Mjlab-PrecisionStep-Flat-MicroDuck`) on the all-collisions robot, with the ball in the scene as an obstacle: touching it ends the episode.
+- **Lesson on record:** the first run placed perfectly but arrived crouched, and the kick never fired (0/60). An arrival-posture term fixed it. The card has the details.
+- **Sim only.** The pulse aligner remains the named fallback.
 
 ## A note on scope
 
