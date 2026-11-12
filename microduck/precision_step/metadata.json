@@ -25,8 +25,14 @@
     "lineage": "run 1 (chunk1, from scratch) stopped at 1253: model_1000 placed to 4.5 mm but arrived in a ~30-36 deg hip/knee crouch and the kick never fired (0/60 missions). Run 2 (chunk2_pose) = plain resume from run 1 model_1250 with arrival-posture terms (legs at HOME within 30 mm of the target) -> 3999."
   },
   "contract": {
-    "obs_shape": [1, 61],
-    "action_shape": [1, 14],
+    "obs_shape": [
+      1,
+      61
+    ],
+    "action_shape": [
+      1,
+      14
+    ],
     "obs_layout": "same as VelStand: ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61",
     "command": "slots 48:51 = REMAINING offset to the target pose in the trunk's current yaw frame [dx m (forward), dy m (left), dyaw rad]; recomputed every tick; slots 51:61 (head/body) = 0. Trained range |(dx,dy)| <= 0.25 m, |dyaw| <= 15 deg.",
     "command_note": "VelStand reads slots 48:51 as a velocity; this policy reads them as an offset. The supervisor picks the ONNX, so it fills the slots to match.",
@@ -48,10 +54,31 @@
   },
   "known_weaknesses": [
     "SIM ONLY -- never run on the physical robot",
-    "feet end ~10 mm behind HOME relative to the trunk, so the ball sits ~+10 mm far of the kick spot from the right foot; every mission still kicked, but the ball rolls ~1.0 m vs 1.26 m with the pulse aligner",
-    "the kick still lands ~15 deg left of the aim line (a BallKick v1 property, not this policy's)",
     "ground-truth pose and ball position in sim; no odometry or vision yet",
-    "the mission pivots with VelStand first when the heading is > 8 deg off (the step policy trained on +-15 deg)"
+    "the mission pivots with VelStand first when the heading is > 8 deg off (the step policy trained on +-15 deg)",
+    "feet end ~5 mm behind HOME relative to the trunk; compensated in the mission by a +10 mm stance target shift (policy unchanged)",
+    "BallKick v1's ~18 deg left drift is compensated by a -17.9 deg mission aim offset (right foot only)"
   ],
-  "code": "github.com/dillonfaulk/microduck_rl, branch local/velstand-own-teachers, commits a74d061d (code) + 16534d57 (runs/evals)"
+  "code": "github.com/dillonfaulk/microduck_rl, branch local/velstand-own-teachers, commits a74d061d (code) + 16534d57 (runs/evals); calibrations 0cdcc030 + e3ea0569, viewer run 27007cd7",
+  "mission_calibrations_2026-11-11": {
+    "note": "supervisor constants in kick_mission.py; no ONNX, reward or training change; measured in order (stance, then aim) on the v1 scenarios, seeds 0+1, 60 missions",
+    "PRECISE_STANCE_SHIFT_M": {
+      "value_m": 0.01,
+      "env": "KICK_STANCE_SHIFT",
+      "applies_to": "precision path only (pulse fallback keeps its own target)",
+      "pre": "ball +10.2 mm farther than trained from the kicking foot (median); roll median 1.01 m (0.76-1.30)",
+      "post": "ball +0.25 mm; roll median 1.20 m (1.02-1.38); 60/60 kicked, 0 bumps, 0 falls; 59/60 rolled farther, 1 rolled 3.4 cm less, none below 0.76 m",
+      "commit": "0cdcc030"
+    },
+    "KICK_AIM_OFFSET": {
+      "value_deg": -17.9,
+      "env": "KICK_AIM_OFFSET_DEG",
+      "sign": "+yaw is LEFT (CCW); kick_dir_err_deg > 0 = ball left of intended; offset negative = aim right",
+      "pre": "drift +17.9 deg median (std 1.7, IQR 16.5-19.1, flat across ball distance) from the +10 mm stance; +15.5 deg from the v1 stance",
+      "post_headless": "+0.1 deg median (-3.8..+4.0); roll 1.20 m; 60/60 kicked, 0 bumps, 0 falls",
+      "post_viewer": "Dillon's run, 30/30 kicked, all precision, 0 falls; +0.5 deg median (-5..+3), 28/30 within 2 deg; roll 1.19 m (1.10-1.31)",
+      "scope": "right foot (BallKick v1 ts0.25 model_1000) only",
+      "commit": "e3ea0569"
+    }
+  }
 }

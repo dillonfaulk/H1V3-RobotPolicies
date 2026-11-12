@@ -64,6 +64,31 @@ The mission test uses the same random balls and kick directions (seeds 0 and 1) 
 
 **Fallback:** a 6 s timeout or a fall swaps VelStand back in, and the pulse aligner finishes the approach. A bumped ball re-enters the precision step at most twice. Every mission logs its `approach_mode` (`precision`, `precision->pulse fallback`, or `pulse`) and the worst leg-joint deviation at the kick swap. All reported numbers are `precision` mode; the fallback never triggered.
 
+## Mission calibrations (2026-11-11)
+
+These are two supervisor constants in `kick_mission.py`. Neither one retrains or changes any policy. They were measured in order, on the same 60 headless scenarios as v1 (seeds 0 and 1), because the aim has to be calibrated against the stance it will kick from.
+
+| Constant | Value | Why |
+|---|---|---|
+| `PRECISE_STANCE_SHIFT_M` (env `KICK_STANCE_SHIFT`) | **+0.010 m** along the kick line | The policy parks the trunk on target, but its feet end ~5 mm behind HOME. So, measured from the kicking foot, the ball sat +10.2 mm farther than the kick trained on. Only the precision path uses this; the pulse fallback keeps its own foot-relative target. |
+| `KICK_AIM_OFFSET` (env `KICK_AIM_OFFSET_DEG`) | **−17.9°** | Cancels BallKick v1's left drift. +yaw is left, so the duck faces 17.9° right of the intended line. The kick result and the viewer's yellow arrow are still measured against the intended line. Right foot only. |
+
+| 60 missions, seeds 0+1 | v1 | + stance shift | + aim offset |
+|---|---|---|---|
+| Kicked / bumped / falls | 60 / 0 / 0 | 60 / 0 / 0 | 60 / 0 / 0 |
+| Ball vs trained spot, from the kicking foot (median) | +10.2 mm | +0.25 mm | +0.5 mm |
+| Ball roll, median (range) | 1.01 m (0.76–1.30) | **1.20 m** (1.02–1.38) | 1.20 m (1.04–1.37) |
+| Kick direction, + = left (median, range) | +15.5° (11.2–19.3) | +17.9° (13.4–21.2) | **+0.1°** (−3.8 to +4.0) |
+| Worst leg joint vs HOME / mission time | 3.0° / 17.7 s | 3.0° / 17.7 s | 3.1° / 17.8 s |
+
+**Notes:**
+- **Stance shift:** 59 of 60 missions rolled farther. One rolled 3.4 cm less than its own v1 run. None rolled less than v1's shortest (0.76 m). The pulse aligner's matching measurement is 1.22 m.
+- **Drift is a constant:** std 1.7°, and 17.9 / 17.4 / 17.9° across the three ball-distance bands. That's why a single constant is the fix.
+- **Order matters:** moving the stance moved the drift from 15.5° to 17.9°.
+- **Dillon's viewer run with both constants:** 30/30 kicked, all precision, 0 falls. Kick direction median +0.5°, range −5 to +3°, 28/30 within 2°. Ball roll median 1.19 m (1.10–1.31).
+
+Logs are in `results/calibration_2026-11-11/`. Commits are `0cdcc030` (stance shift), `e3ea0569` (aim offset) and `27007cd7` (viewer run). `code/mission_stats.py` produces these summaries.
+
 ## Run it (from the microduck_rl repo root)
 
 ```bash
@@ -88,16 +113,17 @@ uv run python scripts/step_battery.py $P --episodes 50 --prestand $V
 | `precision_step_model_3999.onnx` | The policy |
 | `metadata.json` | Hashes, contract, training settings, measured results |
 | `config/` | Task config, the run's `agent.yaml` / `env.yaml`, and an extract of the PrecisionStep section of `mdp.py` |
-| `code/` | `kick_mission.py` (with `--precision`; supersedes the copy in `../ballkick/code/`), `step_battery.py`, cfg tests |
+| `code/` | `kick_mission.py` (with `--precision` and the 2026-11-11 calibrations; supersedes the copy in `../ballkick/code/`), `step_battery.py`, `mission_stats.py`, cfg tests |
 | `results/eval_2026-11-11/` | Batteries and missions: `run2_m3999_*` (shipped), `run2_m2000_*`, and `run1_m1000_*` (the crouch) |
 | `results/viewer_auto30_2026-11-11/` | Dillon's 30/30 viewer run: event logs and tally |
+| `results/calibration_2026-11-11/` | Stance-shift and aim-offset missions (headless, seeds 0+1) and the viewer tally with both constants |
 
 `code/` and `config/` are a snapshot of [dillonfaulk/microduck_rl @ local/velstand-own-teachers](https://github.com/dillonfaulk/microduck_rl/tree/local/velstand-own-teachers), commits `a74d061d` (code) and `16534d57` (both runs, every checkpoint, all evals).
 
 ## Known limits
 
-- **The feet end about 10 mm behind HOME** relative to the trunk, so from the right foot the ball sits about 10 mm farther than the kick trained on. Every mission still kicked, but the ball rolls about 1.0 m instead of 1.26 m. Moving the mission's target about 10 mm forward should fix that, with no retraining.
-- **The kick still lands about 15° left of the aim line.** That comes from BallKick v1, not this policy.
+- **The feet end about 5 mm behind HOME** relative to the trunk, so with the trained target the ball sat about 10 mm too far from the kicking foot. The mission compensates by moving the target +10 mm (see [Mission calibrations](#mission-calibrations-2026-11-11)). The policy itself is unchanged.
+- **BallKick v1 kicks about 18° left** from this stance. The mission's −17.9° aim offset cancels it. The offset is right foot only, and a left-foot kick needs its own measurement.
 - **Sim only, ground-truth pose and ball.**
 
 ## License and attribution

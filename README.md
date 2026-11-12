@@ -377,7 +377,7 @@ A right-foot kick policy trained on Pollen's `Mjlab-BallKick-Flat-MicroDuck` tas
 
 - **The policy can't see the ball.** It kicks from one trained stance, so all the placement work is in the mission's aligner.
 - **Measured (headless CPU sim, iteration 1000):** 50/50 kicks with the duck still standing, 50/50 through the VelStand → kick → VelStand handoff, 57/60 full missions, and 28/30 in a live 30-mission viewer run. No falls in any mission. Every failure was a ball bumped while lining up.
-- **Known weaknesses:** kicks land about 15° left of the aim line and about 1.6x harder than the 0.25 m/s target. It's right foot only. Later checkpoints overfit the start stance, so iteration 1000 ships and a wider-stance retrain is next.
+- **Known weaknesses:** kicks land about 15–18° left of the aim line (the mission now cancels this with a −17.9° aim offset; see PrecisionStep below) and about 1.6x harder than the 0.25 m/s target. It's right foot only. Later checkpoints overfit the start stance, so iteration 1000 ships and a wider-stance retrain is next.
 - **Upstream note:** the task's target speed and reward weights disagree upstream. This run trained at 0.25 m/s through a fork-local env var; details are in the card.
 - **Sim only.**
 - **Superseded approach:** the PrecisionStep policy below now does the final approach (60/60 missions); the pulse aligner described here stays as its fallback.
@@ -396,6 +396,7 @@ A third policy in the same hot-swap family, in [`microduck/precision_step/`](mic
 - **Placement:** 50/50 kick-ready from a VelStand start (median 4.8 mm, 0.46°, legs within 3° of HOME), 49/50 with a 0.3 m/s push.
 - **Trained** in a new fork-local task (`Mjlab-PrecisionStep-Flat-MicroDuck`) on the all-collisions robot, with the ball in the scene as an obstacle: touching it ends the episode.
 - **Lesson on record:** the first run placed perfectly but arrived crouched, and the kick never fired (0/60). An arrival-posture term fixed it. The card has the details.
+- **Mission calibrations (2026-11-11, no retraining):** two supervisor constants fix the remaining issues. A +10 mm stance shift brings the ball roll from 1.01 m back to 1.20 m. A −17.9° aim offset cancels BallKick's left drift, so kicks land at +0.1° median headless (−3.8 to +4.0°) and +0.5° in the viewer (30/30). Both are still 60/60 with 0 bumps and 0 falls.
 - **Sim only.** The pulse aligner remains the named fallback.
 
 ## A note on scope

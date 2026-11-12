@@ -21,13 +21,22 @@
     "ball_target_speed_note": "set with MICRODUCK_BALL_TARGET_SPEED=0.25 (fork-local env var). Upstream commit 2a0b1b08 restored BALL_TARGET_SPEED=1.0 but kept the 12 / -4 reward weights sized for 0.25 (a3fb8635). config/microduck_ball_kick_env_cfg.py defaults to 1.0; config/env.yaml records the 0.25 the run actually used.",
     "robot_model": "groundcontact (as upstream); evaluated on the all-collisions robot",
     "episode_s": 5,
-    "ball_offset_m": [0.09, -0.042],
+    "ball_offset_m": [
+      0.09,
+      -0.042
+    ],
     "ball_offset_noise_m": 0.015,
     "run_length": "stopped at iteration 3650 by a hardware crash; 1000 chosen on eval (later checkpoints lose alignment tolerance, see README)"
   },
   "contract": {
-    "obs_shape": [1, 61],
-    "action_shape": [1, 14],
+    "obs_shape": [
+      1,
+      61
+    ],
+    "action_shape": [
+      1,
+      14
+    ],
     "obs_layout": "same as VelStand: ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61 (all zero during the kick)",
     "ball_in_obs": false,
     "ball_note": "the actor is ball-blind: the duck must already stand with the ball at (0.09, -0.042) m in its yaw frame, within about +-15 mm. Only the critic saw the ball.",
@@ -46,7 +55,7 @@
   },
   "known_weaknesses": [
     "SIM ONLY -- never run on the physical robot",
-    "kicks land ~15 deg left of the intended line in missions, consistently",
+    "kicks land ~15-18 deg left of the intended line, consistently (17.9 deg, std 1.7, from PrecisionStep's +10 mm stance); a property of this policy, compensated since 2026-11-11 by kick_mission.py KICK_AIM_OFFSET = -17.9 deg (+yaw left) -> +0.1 deg median headless, +0.5 deg viewer",
     "ball speed overshoots the 0.25 m/s target ~1.6x",
     "ball-blind: needs the external aligner to place the duck within ~+-15 mm",
     "later checkpoints overfit the start stance: mission success falls from 29/30 at 1000 to 4/30 at 3000",
