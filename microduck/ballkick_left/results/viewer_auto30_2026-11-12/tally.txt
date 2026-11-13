@@ -1,0 +1,10 @@
+Dillon's live viewer run, 2026-11-12 ~20:11, --auto 30, seed 0, LEFT foot
+BallKick left ts0.25 model_1250 + PrecisionStep model_3999 + VelStand round3 model_3999
+Left calibrations: stance shift 0 mm, aim offset +11.2 deg (commit 41ac224f)
+
+30 missions: 30 kicked, 0 missed, 0 aborted, 0 falls; all [step] (precision), 0 pulses
+kick direction vs the intended arrow (deg, + = left):
+  -3 -1 -1 -2 +1 +2 +1 +2 +0 +1 -1 -1 -0 -6 -2 -0 +0 -1 +0 +3 +0 -1 -3 -0 -2 -1 +0 -2 -1 -0
+  median -0.5, range -6..+3, 26/30 within 2 deg, 20/30 within 1 deg
+ball roll (m): median 1.26, range 0.96..1.46; peak ball speed median 0.45 m/s (1.8x the 0.25 target)
+Clip: ~/Videos/duck_leftkick_201337.mp4 (60 s, 2560x1440, 1800 frames, clean decode)

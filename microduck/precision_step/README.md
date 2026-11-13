@@ -122,6 +122,8 @@ uv run python scripts/step_battery.py $P --episodes 50 --prestand $V
 
 ## Known limits
 
+- **Left-foot kicks work unchanged but with no stance shift (2026-11-12).** With the ball on the left (`--foot left`), it placed the duck for 450 left-foot missions across seven kick checkpoints (and the calibrated runs) with 0 bumps. Moving the stance target +9 mm closer made its stepping foot clip the ball (2/60), because it only ever trained with the ball on the right. See [`../ballkick_left/`](../ballkick_left/README.md).
+
 - **The feet end about 5 mm behind HOME** relative to the trunk, so with the trained target the ball sat about 10 mm too far from the kicking foot. The mission compensates by moving the target +10 mm (see [Mission calibrations](#mission-calibrations-2026-11-11)). The policy itself is unchanged.
 - **BallKick v1 kicks about 18° left** from this stance. The mission's −17.9° aim offset cancels it. The offset is right foot only, and a left-foot kick needs its own measurement.
 - **Sim only, ground-truth pose and ball.**

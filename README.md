@@ -18,7 +18,7 @@ Reinforcement learning locomotion policies for four robots. Three were trained i
 - **asimov-1** ([menloresearch/asimov-1](https://github.com/menloresearch/asimov-1)) - a 1.2m/35kg open-source humanoid. Trained with PPO + Adversarial Motion Priors (AMP) for omnidirectional walking (forward/backward/strafe/turn), with a live ROS2 teleop bridge for real-time keyboard control.
 - **v1x1** - a custom quadruped. Trained with PPO for omnidirectional walking, also with a live ROS2 teleop bridge.
 - **BDX-R** ([BDX-R/BDX-R-IsaacLab](https://github.com/BDX-R/BDX-R-IsaacLab)) - an open-source Disney BDX-droid-inspired biped, hardware target under $3000. Trained with plain PPO for omnidirectional velocity-command walking on flat ground.
-- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it a right-foot ball-kick policy with a go-kick-recover mission, and a precision-step policy that places the duck to within ~5 mm for the kick. Sim-validated only.
+- **Microduck** ([pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)) - Pollen Robotics' ~800 g open-source biped. **Trained in mjlab, not Isaac Lab**: one VelStand policy that walks on velocity commands and gets back up after falling, plus a v0 go-to-point waypoint supervisor that drives it, right- and left-foot ball-kick policies with a go-kick-recover mission, and a precision-step policy that places the duck to within ~5 mm for the kick. Sim-validated only.
 
 ## Two training stacks — read this first
 
@@ -45,6 +45,7 @@ Policies here come from **two different simulators**. They are not interchangeab
 | BDX-R | Velocity walking, flat (PPO) | `checkpoints/bdxr/bdxr_velocity_flat_validated.pt` | Isaac Lab | 39 obs / 10 actions | Validated (sim) |
 | Microduck | VelStand: walks AND gets up, one policy | `microduck/velstand/velstand_round3_model_3999.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 | Microduck | BallKick v1: right-foot kick (ball-blind, swapped in by a mission script) | `microduck/ballkick/ballkick_right_ts0p25_model_1000.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
+| Microduck | BallKick v1: left-foot kick (mirror of the right, own calibrations) | `microduck/ballkick_left/ballkick_left_ts0p25_model_1250.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 | Microduck | PrecisionStep v1: final-approach step-to-pose (twist slots = remaining target offset) | `microduck/precision_step/precision_step_model_3999.onnx` | **mjlab** | 61 obs / 14 actions, 50 Hz, normalizer baked in | Sim-validated, NOT hardware-tested |
 
 <p align="center">
@@ -144,6 +145,7 @@ microduck/                     # mjlab-trained (NOT Isaac Lab), see the Microduc
   velstand/                    # ONNX policies + metadata.json + config/ snapshot (task cfg, distill, PPO agent.yaml)
   goto_point/                  # v0 go-to-point waypoint supervisor (no training) + acceptance results
   ballkick/                    # BallKick v1 right-foot ONNX + kick mission (navigate, align, kick, recover) + evals
+  ballkick_left/               # BallKick v1 left-foot ONNX + left calibrations + evals
   precision_step/              # PrecisionStep v1 final-approach ONNX + battery + mission --precision mode + evals
 
 tools/
@@ -398,6 +400,22 @@ A third policy in the same hot-swap family, in [`microduck/precision_step/`](mic
 - **Lesson on record:** the first run placed perfectly but arrived crouched, and the kick never fired (0/60). An arrival-posture term fixed it. The card has the details.
 - **Mission calibrations (2026-11-11, no retraining):** two supervisor constants fix the remaining issues. A +10 mm stance shift brings the ball roll from 1.01 m back to 1.20 m. A −17.9° aim offset cancels BallKick's left drift, so kicks land at +0.1° median headless (−3.8 to +4.0°) and +0.5° in the viewer (30/30). Both are still 60/60 with 0 bumps and 0 falls.
 - **Sim only.** The pulse aligner remains the named fallback.
+
+## Microduck: BallKick v1 (left foot)
+
+<p align="center">
+  <img src="images/microduck_ballkick_left_demo.gif" alt="Microduck stepping onto a stance spot to the right of a ball and kicking it with its left foot along a yellow arrow in the MuJoCo viewer" width="70%" />
+  <br>
+  <em>A full left-foot mission, MuJoCo CPU viewer, real speed: VelStand walks in, PrecisionStep steps onto the green disk, the left foot kicks.</em>
+</p>
+
+The mirror of the right-foot kick, in [`microduck/ballkick_left/`](microduck/ballkick_left/README.md). It's the same Pollen task with the foot flag flipped, trained from scratch at the same 0.25 m/s target, and run through the same PrecisionStep mission with `--foot left`.
+
+- **Missions (iteration 1250):** 60/60 headless and 30/30 in Dillon's live viewer, with 0 bumps and 0 falls. Kicks land at −0.2° median headless (−3.5 to +3.6°) and −0.5° in the viewer.
+- **Battery:** 50/50 standing, 50/50 through the VelStand handoff, and 50/50 with a push at 1.0 s and at 3.5 s.
+- **Its own calibrations, nothing inherited from the right foot:** this kick drifts about 11° *right*, so the mission aims it +11.2°. There's no stance shift: a +9 mm shift made PrecisionStep bump a left-side ball (2/60), and unshifted it already rolls 1.2 m.
+- **Same overfitting as the right foot:** missions drop to 42/60 by iteration 1999, so 1250 ships.
+- **Sim only.**
 
 ## A note on scope
 

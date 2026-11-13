@@ -100,7 +100,7 @@ uv run python scripts/kick_battery.py <ballkick.onnx> --target 0.25 --scene allc
 - **Kicks drift left of the intended line** in missions, and they do it consistently: about 15–16° from the pulse aligner's stance, and **17.9° (std 1.7°)** from PrecisionStep's +10 mm stance, flat across ball distance. This stays a property of the policy. Since 2026-11-11 the mission cancels it with a supervisor aim offset, `KICK_AIM_OFFSET = −17.9°`: the duck faces 17.9° right of the intended line (+yaw is left). With the offset, kicks land at a median **+0.1°** headless (−3.8 to +4.0°, 60 missions) and **+0.5°** in Dillon's viewer run (−5 to +3°, 30/30). The value is calibrated for the right foot only. See [`../precision_step/README.md`](../precision_step/README.md#mission-calibrations-2026-11-11).
 - **Too strong:** the ball leaves at about 1.6x the 0.25 m/s target.
 - **Narrow stance tolerance.** The duck has to be placed within about ±15 mm, and most of a mission's 23 s goes to lining up. A retrain with wider start-stance randomization is the planned v2.
-- **Right foot only.**
+- **Right foot only.** The left-foot mirror is in [`../ballkick_left/`](../ballkick_left/README.md) (2026-11-12) and has its own drift (about 11° right) and calibration.
 - **Sim only, ground-truth ball and pose.**
 
 ## License and attribution

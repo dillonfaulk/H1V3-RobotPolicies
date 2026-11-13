@@ -1,0 +1,82 @@
+{
+  "robot": "microduck",
+  "training_stack": "mjlab 1.3.0 (MuJoCo Warp), PPO via RSL-RL, trained with pollen-robotics/microduck_rl (fork dillonfaulk/microduck_rl)",
+  "task": "Mjlab-BallKick-Flat-MicroDuck",
+  "kick_foot": "left",
+  "primary_policy": "ballkick_left_ts0p25_model_1250.onnx",
+  "policies": {
+    "ballkick_left_ts0p25_model_1250.onnx": {
+      "status": "current (v1)",
+      "training_run": "logs/rsl_rl/ball_kick_left/2026-11-12_18-13-14_ts0p25_left_chunk1",
+      "source_file": "model_1250.pt",
+      "source_sha256": "6ee1bc1e677442f4d4ba89f57be42e4eb7d864445a87129241739186c27f6deb",
+      "onnx_sha256": "ae0f3bb168e5a064e8cf96e09be6e672d7caa95f45c17017739db88ecdd293dd",
+      "iteration": 1250,
+      "max_abs_diff_vs_pytorch": 1.91e-06
+    }
+  },
+  "training": {
+    "num_envs": 4096,
+    "gpu": "GPU0 only, peak ~6.5 GB used by the run (7.6 GB on the card incl. ~1.1 GB display)",
+    "iterations": 2000,
+    "s_per_iteration": 2.5,
+    "env_vars": "MICRODUCK_KICK_FOOT=left (fork-local, unset = right), MICRODUCK_BALL_TARGET_SPEED=0.25 (fork-local, unset = 1.0)",
+    "ball_target_speed_m_s": 0.25,
+    "robot_model": "groundcontact (as upstream); evaluated on the all-collisions robot",
+    "episode_s": 5,
+    "ball_offset_m": [
+      0.09,
+      0.042
+    ],
+    "ball_offset_noise_m": 0.015,
+    "support_foot": "right",
+    "from_scratch": true,
+    "reward_signs": "every penalty term <= 0 on every readout, iterations 0-1999"
+  },
+  "contract": {
+    "obs_shape": [
+      1,
+      61
+    ],
+    "action_shape": [
+      1,
+      14
+    ],
+    "obs_layout": "same as VelStand: ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61 (all zero during the kick)",
+    "ball_in_obs": false,
+    "control_hz": 50,
+    "obs_normalization": "empirical normalizer BAKED INTO the ONNX (exported with scripts/export.py) -- feed raw observations",
+    "use": "hard swap from VelStand / PrecisionStep with the ball at (0.09, +0.042) m in the trunk yaw frame; hold 2 s; swap VelStand back"
+  },
+  "measured_results_model_1250": {
+    "battery_50": "50/50 good kicks (kicked and standing); peak ball speed 0.36 m/s median = 1.4x target",
+    "prestand_handoff_50": "50/50 (1.5 s VelStand stand -> kick -> VelStand at 2 s); peak 0.41 m/s = 1.6x",
+    "push_0.3_m_s": "50/50 at 1.0 s, 50/50 at 3.5 s",
+    "missions_uncalibrated_2x30": "60/60 kicked, 0 bumps, 0 falls, precision mode 60/60; roll 1.19 m; kick direction -11.2 deg median (RIGHT of intended), std 1.3, flat across ball distance",
+    "missions_calibrated_2x30": "60/60 kicked, 0 bumps, 0 falls; kick direction -0.2 deg median (-3.5..+3.6); roll 1.21 m; peak 0.44 m/s",
+    "missions_viewer_30": "Dillon's live viewer run: 30/30 kicked, all precision, 0 falls; kick direction -0.5 deg median (-6..+3), 26/30 within 2 deg; roll 1.26 m median (0.96-1.46); peak 0.45 m/s",
+    "stay_up_rate": "100% in every battery and mission at 1250 (no falls)"
+  },
+  "checkpoint_choice": "1250 over 1000 (also 60/60): tighter drift (std 1.3 vs 1.9), 50/50 in every battery. Overfits later like the right foot: missions 60/60 at 1500, 55/60 at 1750, 42/60 at 1999 (battery still 49-50/50)",
+  "mission_calibrations": {
+    "note": "supervisor constants in kick_mission.py, --foot left; measured against THIS checkpoint, no right-foot reuse (right keeps +10 mm / -17.9 deg)",
+    "PRECISE_STANCE_SHIFT_M_left": {
+      "value_m": 0.0,
+      "why": "unshifted the ball sits +9.4 mm far of the kick spot from the left foot but already rolls 1.19 m; +9 mm tested and REJECTED: 58/60, 2 bumps (PrecisionStep's stepping foot clipped the ball; it trained with the ball on the right side only)"
+    },
+    "KICK_AIM_OFFSET_left": {
+      "value_deg": 11.2,
+      "sign": "+yaw is LEFT; this kick drifts RIGHT (-11.2 deg), so the offset is positive (aim left)"
+    },
+    "commit": "41ac224f"
+  },
+  "known_weaknesses": [
+    "SIM ONLY -- never run on the physical robot",
+    "kicks drift ~11 deg RIGHT of the intended line (mirror of the right foot's ~18 deg left, smaller); compensated by the mission's +11.2 deg aim offset",
+    "too strong: ~0.41-0.45 m/s in missions vs the 0.25 m/s target (1.6-1.8x; right foot ~1.6x)",
+    "ball sits ~9 mm farther than trained from the left foot (no stance shift: a shift made PrecisionStep bump a left-side ball)",
+    "narrow start-stance tolerance in later checkpoints (overfit after 1500)",
+    "ground-truth pose and ball position in sim"
+  ],
+  "code": "github.com/dillonfaulk/microduck_rl, branch local/velstand-own-teachers, commits f3fab128 (left-foot tooling), 41ac224f (left calibrations), d040a8e0 (run, evals, logs)"
+}

@@ -1,0 +1,10 @@
+== 2026-11-12_18-13-14_ts0p25_left_chunk1_model_1250.onnx (left foot) on ball, swapped in after 1.5s of VelStand standing, VelStand handoff at 2.0s: 50 episodes, target 0.25 m/s
+  kicked (ball moved forward): 50/50
+  peak ball speed: median 0.41 m/s (p10 0.36, p90 0.46) = 1.6x target
+  ball travel (forward, 5 s): median 1.41 m (p10 1.16, p90 1.60)
+  direction error |deg|: median 10.0 (p90 18.5, max 33.7)
+  direction error signed (+ = left): median -8.4 deg (p10 -18.5, p90 +7.4)
+  contact time: median 0.18 s after the swap-in
+  duck at end: standing 50/50, not upright (never fell, held a lean) 0, fell-recovered 0, fell 0
+  GOOD KICKS (kicked AND standing at the end, never fell): 50/50
+  (7 s wall)
