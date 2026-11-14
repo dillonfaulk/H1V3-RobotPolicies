@@ -107,7 +107,7 @@ MICRODUCK_KICK_FOOT=left MICRODUCK_BALL_TARGET_SPEED=0.25 uv run train Mjlab-Bal
 ## Known limits
 
 - **Too strong:** 0.41–0.45 m/s in missions against the 0.25 m/s target (1.6–1.8×), about the same as the right foot. Both feet's overshoot is the input for BallKick v2.
-- **The ball sits ~9 mm farther than trained** from the left foot. The stance can't move closer with PrecisionStep v1 without bumping the ball, so the kick tolerates it instead.
+- **The ball sits ~9 mm farther than trained** from the left foot. The stance can't move closer with PrecisionStep v1 without bumping the ball, so the kick tolerates it instead. [PrecisionStep v2](../precision_step_v2/README.md) (2026-11-13) removes that limit: 60/60 at +9 mm with 0 bumps. The aim at +9 mm hasn't been recalibrated yet (kicks land about 5° right).
 - **Narrow start-stance tolerance** in later checkpoints, the same overfitting as the right foot. A wider start-stance retrain is the planned v2.
 - **Sim only, ground-truth ball and pose.**
 

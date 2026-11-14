@@ -1,0 +1,35 @@
+PrecisionStep v2 (ball on BOTH sides) — eval summary, 2026-11-13
+Run: logs/rsl_rl/precision_step_v2/2026-11-13_16-23-21_v2_chunk1
+     MICRODUCK_PSTEP_BALL_SIDES=both, 2048 envs, 4000 its from scratch, GPU0, 11.8 GB, 1.46 s/it, 1 h 38 min
+     every penalty <= 0 on every readout; nan_state 0; 48 video files
+SHIPPED: model_2500 (Dillon, 2026-11-13). ONNX vs PyTorch max abs diff 1.19e-6 (1000 obs).
+
+== Step battery: 200 episodes, --prestand VelStand round3, --seed 1, --ball-side both
+   (v1's 11-11 battery was 50 eps at seed 1; the default-side rerun reproduces it exactly)
+ckpt         | RIGHT kick-ready | LEFT kick-ready | pos median R/L mm | failure causes (R | L)
+v1 3999      | 106/112          | 86/88           | 4.8 / 4.0         | fell 3 struck 3 | fell 1 pos 1
+v2 2000      |  98/112          | 86/88           | 4.8 / 4.3         | fell 2 struck 6 pos 2 stagger 2 posture 2 | fell 1 pos 1
+v2 2500 *    | 103/112          | 80/88           | 3.2 / 3.0         | fell 1 struck 5 stagger 2 posture 1 | fell 1 posture 6
+v2 3000      |  84/112          | 72/88           | 3.3 / 3.3         | struck 5 stagger 2 posture 21 | struck 1 posture 14
+v2 3500      |  93/112          | 78/88           | 4.7 / 4.5         | fell 1 struck 2 pos 1 stagger 1 posture 14 | struck 1 stagger 1 posture 8
+v2 3999      |  95/112          | 76/88           | 3.0 / 2.9         | fell 2 struck 3 pos 1 stagger 1 posture 10 | fell 1 posture 10
+"posture" = stopped on target but a leg joint >= 5.7 deg (0.10 rad) off HOME. Late checkpoints
+trade posture for placement. Brief bar (>= v1 right, within noise left) is MISSED on the battery:
+2500 is 3 short on the right (v1 had 3 falls there, 2500 had 1) and 6 short on the left (all posture).
+
+== Missions, 2 x 30 (seeds 0,1), VelStand round3 + v1 kick winners, through PrecisionStep v2
+config                          | 2500                                    | 3999
+right foot (+10 mm, aim -17.9)  | 60/60, 0 bump, 0 fall; +0.6 (-4.3..+5.6); 1.21 m; 0.47 m/s | 60/60; +0.3 (-4.9..+4.0); 1.09 m; 0.46
+left foot (0 mm, aim +11.2)     | 60/60, 0 bump, 0 fall; +0.9 (-4.8..+4.5); 1.17 m; 0.42 m/s | 60/60; +0.3 (-4.9..+4.9); 1.24 m; 0.45
+left +9 mm REGRESSION TEST      | 60/60, 0 bump, 0 fall; -4.8 (-15.4..-1.8); 1.24 m          | 60/60, 0 bump; -7.1 (-12.1..-2.6); 1.30 m
+leg_dev at kick (median/worst)  | 3.6 / 6.4 deg                            | 5.5 / 8.2 deg
+v1 reference: +9 mm left = 58/60, 2 bumps (PrecisionStep v1 stepping foot clipped the ball).
+Kicks from up to 8 deg off-HOME legs all fired: the battery's 5.7 deg gate is stricter than the v1 kick needs.
++9 mm left direction is -5..-7 deg because the +11.2 aim was calibrated at 0 mm (stance moves drift) -> Phase 2 calibration.
+
+== Dillon viewer, 30 back to back, 2500, left +9 mm (logs/kick_mission/2026-11-13_18-19-46_viewer/tally.txt)
+30/30 kicked, 0 bumps, 0 falls; direction -4.5 deg median (-13..0, not re-aimed); roll 1.25 m; 0.47 m/s.
+
+Why 2500: missions tie (all 60/60); 2500 has the better battery, arrives closer to HOME (3.6 vs 5.5 deg —
+5.5 already exceeds the +-0.08 rad start-stance DR proposed for BallKick v2), and right-foot roll
+matches v1 (1.21 vs 1.09 m).

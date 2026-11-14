@@ -1,0 +1,64 @@
+{
+  "robot": "microduck",
+  "training_stack": "mjlab 1.3.0 (MuJoCo Warp), PPO via RSL-RL, task code in dillonfaulk/microduck_rl (fork-local, not upstream)",
+  "task": "Mjlab-PrecisionStep-Flat-MicroDuck with MICRODUCK_PSTEP_BALL_SIDES=both",
+  "primary_policy": "precision_step_v2_model_2500.onnx",
+  "supersedes": "../precision_step/precision_step_model_3999.onnx (v1, ball on the right only)",
+  "policies": {
+    "precision_step_v2_model_2500.onnx": {
+      "status": "current (v2)",
+      "training_run": "logs/rsl_rl/precision_step_v2/2026-11-13_16-23-21_v2_chunk1",
+      "source_file": "model_2500.pt",
+      "source_sha256": "fc2f8d36dd9440e3358926a33bbf8574e0b9be03c5dba7850159704c0f45e92c",
+      "onnx_sha256": "fc6325de062e79de91fea032d1ed69cee7e6c01b4da95b844ee897c791bf9e9c",
+      "iteration": 2500,
+      "max_abs_diff_vs_pytorch": 1.19e-06,
+      "max_abs_diff_samples": 1000
+    }
+  },
+  "training": {
+    "change_vs_v1": "ONE variable: in ball episodes the ball's lateral offset is mirrored to the LEFT foot's kick spot with probability 0.5 (reset_step_target ball_left_prob=0.5), same geometry and +-15 mm noise per side. Everything else is v1's recipe.",
+    "history_note": "v1 got its arrival-posture terms at iteration 1250 (a resume after a crouch failure); v2 trains with them from iteration 0. Same final recipe, different order.",
+    "from_scratch": true,
+    "num_envs": 2048,
+    "iterations": 4000,
+    "gpu": "GPU0 only, peak 11.8 GB, 1.46 s/iteration, 1 h 38 min",
+    "robot_model": "all-collisions",
+    "episode_s": 6,
+    "targets": "as v1: 65% radius 0-80 mm, 35% 80-250 mm; heading +-15 deg; 10% hold still",
+    "ball": "70% of episodes, at (0.09, -+0.042) +-15 mm relative to the TARGET stance, side 50/50; moving it > 1 cm terminates the episode (-20); the actor never sees it",
+    "start": "standing, HOME joints +-0.08 rad, +-5 deg roll/pitch",
+    "penalty_signs": "every penalty term <= 0 on every readout, iterations 0-3999",
+    "checkpoint_choice": "2500 of 2000/2500/3000/3500/3999: missions tie at 60/60; 2500 has the best step battery and arrives closest to HOME (3.6 deg median vs 5.5 at 3999)"
+  },
+  "contract": {
+    "obs_shape": [1, 61],
+    "action_shape": [1, 14],
+    "obs_layout": "same as VelStand: ang_vel 0:3, projected_gravity 3:6, joint_pos_rel 6:20, joint_vel 20:34, last_action 34:48, command 48:61",
+    "command": "slots 48:51 = REMAINING offset to the target pose in the trunk's current yaw frame [dx m, dy m (left), dyaw rad]; slots 51:61 = 0. Identical to v1: a drop-in replacement.",
+    "ball_in_obs": false,
+    "control_hz": 50,
+    "obs_normalization": "baked into the ONNX (scripts/export.py) -- feed raw observations"
+  },
+  "measured_results_model_2500": {
+    "step_battery_200_velstand_start_seed1_both_sides": {
+      "ball_right": "kick-ready 103/112; position median 3.2 mm (worst 11.3); struck 6/97; falls 1; posture 1",
+      "ball_left": "kick-ready 80/88; position median 3.0 mm (worst 10.8); struck 1/73; falls 1; posture 6",
+      "v1_3999_same_battery": "right 106/112 (fell 3, struck 3); left 86/88",
+      "verdict": "below v1 on the battery (right -3, within noise; left -6, all from the 5.7 deg posture gate). The missions show that gate is stricter than the v1 kicks need."
+    },
+    "missions_headless_2x30": {
+      "right_foot_kick_v1_1000_stance_plus10mm_aim_minus17.9": "60/60, 0 bumps, 0 falls; direction +0.6 deg median (-4.3..+5.6); roll 1.21 m; peak 0.47 m/s",
+      "left_foot_kick_v1_1250_stance_0_aim_plus11.2": "60/60, 0 bumps, 0 falls; direction +0.9 deg (-4.8..+4.5); roll 1.17 m; peak 0.42 m/s",
+      "left_foot_plus9mm_regression_test": "60/60, 0 bumps, 0 falls (v1: 58/60, 2 bumps); direction -4.8 deg (aim not re-calibrated for +9 mm); roll 1.24 m",
+      "leg_dev_at_kick": "right missions median 3.7 deg (worst 6.4); left missions 3.6 (worst 5.4)"
+    },
+    "missions_viewer_30": "Dillon's live viewer, left foot at +9 mm: 30/30 kicked, 0 bumps, 0 falls; direction -4.5 deg median (-13..0, not re-aimed); roll 1.25 m"
+  },
+  "known_weaknesses": [
+    "SIM ONLY -- never run on the physical robot",
+    "ground-truth pose and ball position in sim",
+    "the step battery's posture gate (every leg joint within 0.10 rad of HOME) fails more often than v1's; every mission still kicked",
+    "the left foot's +9 mm stance is now safe to use but has no calibrated aim yet (that is BallKick v2's calibration step)"
+  ]
+}

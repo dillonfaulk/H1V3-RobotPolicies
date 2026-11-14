@@ -1,0 +1,55 @@
+BAM m6 actuators on 14 joints: kt=0.3660 R=2.8114 vin=7.40V kp_fw=200 vin_drop_gain=0.1 vin_min=6.0 max_current=None forcerange=+/-0.963Nm armature=1.81e-03
+Loading walking policy from: logs/rsl_rl/precision_step_v2/2026-11-13_16-23-21_v2_chunk1/2026-11-13_16-23-21_v2_chunk1_model_3000.onnx
+Walking policy input: obs, shape: [1, 61]
+Walking policy output: actions, shape: [1, 14]
+Sensors found:
+  imu_ang_vel: id=2
+Body IDs:
+  trunk_base: id=1
+Number of actuators: 14
+Default pose: [ 0.     -0.0873 -0.4579 -0.0049  0.453   0.3491  0.3491  0.      0.
+  0.      0.0873  0.4579  0.0049 -0.453 ]
+Action scale: 1.0
+
+Actuator delay enabled:
+  Min lag: 1 timesteps
+  Max lag: 1 timesteps
+  Sampled lag: 1 timesteps
+  Buffer size: 2
+== 2026-11-13_16-23-21_v2_chunk1_model_3000.onnx, swapped in after 1.5s of VelStand standing, ball side both: 200 episodes (170 with a ball)
+  KICK-READY (<= 12 mm, 3 deg, stagger < 10 mm, still, legs within 0.10 rad of HOME, no strike, no fall): 156/200
+  final position error: median 3.3 mm, p90 5.6, worst 11.3
+  final heading error: median 0.38 deg, p90 0.88, worst 1.78
+  front-back foot stagger: median 2.9 mm, p90 6.3, worst 11.5; < 10 mm in 198/200
+  still at the end: 200/200
+  end posture, worst leg joint vs HOME: median 4.2 deg, worst 9.1; within 5.7 deg in 162/200
+  ball struck: 6/170 ball episodes
+  falls: 0/200
+    hold (0)          24 eps: kick-ready 24, median err 0.6 mm, struck 0, falls 0
+    near (<80 mm)    115 eps: kick-ready 86, median err 3.7 mm, struck 0, falls 0
+    far (80-250 mm)   61 eps: kick-ready 46, median err 3.3 mm, struck 6, falls 0
+== ball on the RIGHT: 112 episodes (97 with a ball)
+  KICK-READY (<= 12 mm, 3 deg, stagger < 10 mm, still, legs within 0.10 rad of HOME, no strike, no fall): 84/112
+  final position error: median 3.3 mm, p90 6.0, worst 11.3
+  final heading error: median 0.39 deg, p90 0.98, worst 1.78
+  front-back foot stagger: median 2.8 mm, p90 6.3, worst 11.5; < 10 mm in 110/112
+  still at the end: 112/112
+  end posture, worst leg joint vs HOME: median 4.2 deg, worst 9.1; within 5.7 deg in 88/112
+  ball struck: 5/97 ball episodes
+  falls: 0/112
+    hold (0)          10 eps: kick-ready 10, median err 1.1 mm, struck 0, falls 0
+    near (<80 mm)     67 eps: kick-ready 50, median err 3.5 mm, struck 0, falls 0
+    far (80-250 mm)   35 eps: kick-ready 24, median err 3.5 mm, struck 5, falls 0
+== ball on the LEFT: 88 episodes (73 with a ball)
+  KICK-READY (<= 12 mm, 3 deg, stagger < 10 mm, still, legs within 0.10 rad of HOME, no strike, no fall): 72/88
+  final position error: median 3.3 mm, p90 5.0, worst 9.0
+  final heading error: median 0.37 deg, p90 0.83, worst 1.59
+  front-back foot stagger: median 3.0 mm, p90 6.1, worst 9.3; < 10 mm in 88/88
+  still at the end: 88/88
+  end posture, worst leg joint vs HOME: median 4.0 deg, worst 7.6; within 5.7 deg in 74/88
+  ball struck: 1/73 ball episodes
+  falls: 0/88
+    hold (0)          14 eps: kick-ready 14, median err 0.6 mm, struck 0, falls 0
+    near (<80 mm)     48 eps: kick-ready 36, median err 4.0 mm, struck 0, falls 0
+    far (80-250 mm)   26 eps: kick-ready 22, median err 3.3 mm, struck 1, falls 0
+  (37 s wall)

@@ -1,0 +1,33 @@
+# Dillon viewer run 2026-11-13: PrecisionStep v2 model_2500 + BallKick left model_1250, KICK_STANCE_SHIFT_LEFT=0.009 (the +9 mm regression geometry), aim +11.2 (calibrated at 0 mm, NOT re-calibrated)
+# summary: 30/30 kicked, 0 bumps, 0 falls; direction median -4.5 deg (-13..0), roll 1.25 m, peak 0.47 m/s (max 0.50)
+  mission  1: KICKED  ball 0.46 m/s, rolled 1.30 m, -3 deg off the arrow [step] aligned to (+4, -0) mm in 0 pulses
+  mission  2: KICKED  ball 0.48 m/s, rolled 1.26 m, -5 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission  3: KICKED  ball 0.47 m/s, rolled 1.25 m, -8 deg off the arrow [step] aligned to (+0, -2) mm in 0 pulses
+  mission  4: KICKED  ball 0.46 m/s, rolled 1.20 m, -4 deg off the arrow [step] aligned to (+6, -1) mm in 0 pulses
+  mission  5: KICKED  ball 0.47 m/s, rolled 1.20 m, -3 deg off the arrow [step] aligned to (+1, -2) mm in 0 pulses
+  mission  6: KICKED  ball 0.48 m/s, rolled 1.23 m, -3 deg off the arrow [step] aligned to (+4, -2) mm in 0 pulses
+  mission  7: KICKED  ball 0.48 m/s, rolled 1.26 m, -4 deg off the arrow [step] aligned to (+2, -2) mm in 0 pulses
+  mission  8: KICKED  ball 0.47 m/s, rolled 1.21 m, -1 deg off the arrow [step] aligned to (+7, +1) mm in 0 pulses
+  mission  9: KICKED  ball 0.44 m/s, rolled 1.15 m, -6 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission 10: KICKED  ball 0.48 m/s, rolled 1.30 m, -2 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission 11: KICKED  ball 0.48 m/s, rolled 1.17 m, -6 deg off the arrow [step] aligned to (-1, +1) mm in 0 pulses
+  mission 12: KICKED  ball 0.45 m/s, rolled 1.18 m, -6 deg off the arrow [step] aligned to (+2, -1) mm in 0 pulses
+  mission 13: KICKED  ball 0.45 m/s, rolled 1.22 m, -5 deg off the arrow [step] aligned to (+2, -3) mm in 0 pulses
+  mission 14: KICKED  ball 0.47 m/s, rolled 1.26 m, -7 deg off the arrow [step] aligned to (+2, -2) mm in 0 pulses
+  mission 15: KICKED  ball 0.46 m/s, rolled 1.30 m, -5 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission 16: KICKED  ball 0.43 m/s, rolled 1.21 m, -13 deg off the arrow [step] aligned to (-1, -7) mm in 0 pulses
+  mission 17: KICKED  ball 0.45 m/s, rolled 1.26 m, -13 deg off the arrow [step] aligned to (-1, -5) mm in 0 pulses
+  mission 18: KICKED  ball 0.50 m/s, rolled 1.25 m, -3 deg off the arrow [step] aligned to (+2, -2) mm in 0 pulses
+  mission 19: KICKED  ball 0.50 m/s, rolled 1.28 m, -4 deg off the arrow [step] aligned to (+1, -1) mm in 0 pulses
+  mission 20: KICKED  ball 0.46 m/s, rolled 1.25 m, -8 deg off the arrow [step] aligned to (+3, -5) mm in 0 pulses
+  mission 21: KICKED  ball 0.48 m/s, rolled 1.27 m, -4 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission 22: KICKED  ball 0.45 m/s, rolled 1.25 m, -5 deg off the arrow [step] aligned to (+4, -3) mm in 0 pulses
+  mission 23: KICKED  ball 0.43 m/s, rolled 1.19 m, -6 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission 24: KICKED  ball 0.47 m/s, rolled 1.28 m, -0 deg off the arrow [step] aligned to (+6, -0) mm in 0 pulses
+  mission 25: KICKED  ball 0.45 m/s, rolled 1.19 m, -3 deg off the arrow [step] aligned to (+3, -2) mm in 0 pulses
+  mission 26: KICKED  ball 0.49 m/s, rolled 1.24 m, -2 deg off the arrow [step] aligned to (+2, -0) mm in 0 pulses
+  mission 27: KICKED  ball 0.49 m/s, rolled 1.31 m, -5 deg off the arrow [step] aligned to (+2, -2) mm in 0 pulses
+  mission 28: KICKED  ball 0.47 m/s, rolled 1.23 m, -7 deg off the arrow [step] aligned to (-1, -2) mm in 0 pulses
+  mission 29: KICKED  ball 0.43 m/s, rolled 1.13 m, -4 deg off the arrow [step] aligned to (+5, -1) mm in 0 pulses
+  mission 30: KICKED  ball 0.46 m/s, rolled 1.24 m, -4 deg off the arrow [step] aligned to (+2, -2) mm in 0 pulses
+  30 missions: 30 kicked, 0 missed, 0 aborted, 0 falls

@@ -1,0 +1,31 @@
+BAM m6 actuators on 14 joints: kt=0.3660 R=2.8114 vin=7.40V kp_fw=200 vin_drop_gain=0.1 vin_min=6.0 max_current=None forcerange=+/-0.963Nm armature=1.81e-03
+Loading walking policy from: logs/rsl_rl/precision_step/2026-11-11_16-15-45_chunk2_pose/2026-11-11_16-15-45_chunk2_pose_model_3999.onnx
+Walking policy input: obs, shape: [1, 61]
+Walking policy output: actions, shape: [1, 14]
+Sensors found:
+  imu_ang_vel: id=2
+Body IDs:
+  trunk_base: id=1
+Number of actuators: 14
+Default pose: [ 0.     -0.0873 -0.4579 -0.0049  0.453   0.3491  0.3491  0.      0.
+  0.      0.0873  0.4579  0.0049 -0.453 ]
+Action scale: 1.0
+
+Actuator delay enabled:
+  Min lag: 1 timesteps
+  Max lag: 1 timesteps
+  Sampled lag: 1 timesteps
+  Buffer size: 2
+== 2026-11-11_16-15-45_chunk2_pose_model_3999.onnx, swapped in after 1.5s of VelStand standing, ball side right: 50 episodes (46 with a ball)
+  KICK-READY (<= 12 mm, 3 deg, stagger < 10 mm, still, legs within 0.10 rad of HOME, no strike, no fall): 50/50
+  final position error: median 4.8 mm, p90 7.2, worst 9.4
+  final heading error: median 0.40 deg, p90 1.07, worst 2.34
+  front-back foot stagger: median 1.7 mm, p90 5.4, worst 9.6; < 10 mm in 50/50
+  still at the end: 50/50
+  end posture, worst leg joint vs HOME: median 3.0 deg, worst 4.4; within 5.7 deg in 50/50
+  ball struck: 0/46 ball episodes
+  falls: 0/50
+    hold (0)           3 eps: kick-ready 3, median err 1.8 mm, struck 0, falls 0
+    near (<80 mm)     33 eps: kick-ready 33, median err 5.3 mm, struck 0, falls 0
+    far (80-250 mm)   14 eps: kick-ready 14, median err 4.3 mm, struck 0, falls 0
+  (9 s wall)
